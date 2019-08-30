@@ -1,7 +1,11 @@
 import numpy as np
 import quaternion
 import visualization as vis
+from fusion import MadgwickFusion
 from reader import OrebaReader
+
+LOOP_RATE = 64
+UPDATE_RATE = 16
 
 # A node is an edge of the cuboid
 class Node:
@@ -22,7 +26,7 @@ class Cuboid:
     def __init__(self):
         self.nodes = []
         self.faces = []
-        self.quat = np.quaternion(1,0,0,0)
+        self.q = np.quaternion(1, 0, 0, 0) # Initial pose estimate
 
     def set_nodes(self, nodes):
         self.nodes = nodes
@@ -30,12 +34,14 @@ class Cuboid:
     def set_faces(self, faces):
         self.faces = faces
 
-    # TODO here, the quaterion accumulates the rotations instead of actually rotating the nodes
+    def set_quaternion(self, q):
+        self.q = q
+
     def rotate_quaternion(self, w, dt):
-        self.quat = dt/2 * self.quat * np.quaternion(0, w[0], w[1], w[2]) + self.quat
+        self.q = dt/2 * self.q * np.quaternion(0, w[0], w[1], w[2]) + self.q
 
     def rotate_point(self, point):
-        return quaternion.rotate_vectors(self.quat, point)
+        return quaternion.rotate_vectors(self.q, point)
 
     def convert_to_computer_frame(self, point):
         computerFrameChangeMatrix = np.array([[-1, 0, 0], [0, 0, -1], [0, -1, 0]])
@@ -44,7 +50,7 @@ class Cuboid:
     def get_euler_attitude(self):
         def _rad2deg(rad):
             return rad / np.pi * 180
-        m = quaternion.as_rotation_matrix(self.quat)
+        m = quaternion.as_rotation_matrix(self.q)
         test = -m[2, 0]
         if test > 0.99999:
             yaw = 0
@@ -95,15 +101,17 @@ def initialize_cuboid():
 def process():
     cuboid = initialize_cuboid()
     reader = OrebaReader('1004_sensorexport.csv')
-    loopRate = 64
-    gyro = reader.read_gyro()
-    pv = vis.PygameViewer(640, 480, cuboid, 16)
+    madgwick = MadgwickFusion(cuboid.q, LOOP_RATE)
+    acc, gyro = reader.read_inert()
+    pv = vis.PygameViewer(640, 480, cuboid, UPDATE_RATE)
     running = True
     i = 0
-    for ang_rate_x, ang_rate_y, ang_rate_z in gyro:
-        cuboid.rotate_quaternion([ang_rate_x, ang_rate_y, ang_rate_z], 1/loopRate)
-        #print(cuboid.quat)
-        if i % 4 == 0:
+    for acc_t, gyro_t in zip(acc, gyro):
+        # Sensor fusion update
+        madgwick.update(acc_t, gyro_t)
+        cuboid.set_quaternion(madgwick.q)
+        # Update screen every
+        if i % (LOOP_RATE//UPDATE_RATE) == 0:
             if not pv.update():
                 break
         i += 1
