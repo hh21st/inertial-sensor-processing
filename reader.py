@@ -5,6 +5,7 @@ import jpype
 import jpype.imports
 import numpy as np
 import datetime as dt
+import xml.etree.cElementTree as etree
 
 OREBA_FREQUENCY = 64
 
@@ -52,7 +53,6 @@ class UnisensReader:
                                  jRightGyroZEntry.readScaled(count))
         dt = 1000000 // OREBA_FREQUENCY
         timestamps = range(0, count*dt, dt)
-        # TODO read dom_hand information
         return timestamps, left_acc, left_gyro, right_acc, right_gyro
 
     def read_annotations(self, src_dir, subject_id):
@@ -74,6 +74,13 @@ class UnisensReader:
                 label_3.append(row[6])
                 label_4.append(row[7])
         return [start_time, end_time, label_1, label_2, label_3, label_4]
+
+    def read_dominant(self, src_dir, subject_id):
+        path = os.path.join(src_dir, subject_id, "data_sensor", "unisens.xml")
+        for child in etree.parse(path).getroot():
+            if 'left' in child.attrib['id']:
+                dom = 'Right' if 'non' in child.attrib['comment'] else 'Left'
+                return dom
 
     def done(self):
         jpype.shutdownJVM()

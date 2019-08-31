@@ -7,10 +7,13 @@ from writer import TwoHandsWriter
 import csv
 import argparse
 import os
+import logging
 
 LOOP_RATE = 64
 UPDATE_RATE = 16
 DEFAULT_LABEL = "Idle"
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S', level=logging.INFO)
 
 class Node:
     """A node is an edge of the cuboid"""
@@ -106,6 +109,7 @@ def initialize_cuboid():
 
 def remove_gravity(acc, gyro, vis):
     """Remove gravity for one hand."""
+    logging.info("Removing gravity")
     # Initialize
     cuboid = initialize_cuboid()
     madgwick = MadgwickFusion(cuboid.q, LOOP_RATE)
@@ -157,7 +161,9 @@ def main(args=None):
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = UnisensReader()
         for subject_id in subject_ids:
+            logging.info("Working on subject {}".format(subject_id))
             # Read acc and gyro
+            logging.info("Reading raw data from Unisens")
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
             # Remove gravity from acceleration vector
@@ -166,14 +172,19 @@ def main(args=None):
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = get_labels(annotations, timestamps)
+            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
             # Write csv
-            if not os.path.exists(args.exp_dir):
-                os.makedirs(args.exp_dir)
-            exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
+
+            if args.exp_dir == args.src_dir:
+                exp_path = os.path.join(args.exp_dir, subject_id, subject_id + "_inert.csv")
+            else:
+                if not os.path.exists(args.exp_dir):
+                    os.makedirs(args.exp_dir)
+                exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
             writer = TwoHandsWriter(exp_path)
             writer.write(subject_id, timestamps, left_acc, left_acc_0,
-                left_gyro, right_acc, right_acc_0, right_gyro, label_1,
-                label_2, label_3, label_4)
+                left_gyro, right_acc, right_acc_0, right_gyro, dominant_hand,
+                label_1, label_2, label_3, label_4)
         reader.done()
 
     else:
