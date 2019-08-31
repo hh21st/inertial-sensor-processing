@@ -10,6 +10,12 @@ class MadgwickFusion:
         self.beta = 0.25
 
     def update(self, acc, gyro):
+        """One step on Madgwick's algorithm.
+
+        Arguments
+            acc: Accelerometer reading. Unit not important since it is normalized
+            gyro: Gyroscope reading [degrees per second].
+        """
         a = np.quaternion(0, acc[0], acc[1], acc[2]).normalized()
         g = np.quaternion(0, radians(gyro[0]), radians(gyro[1]), radians(gyro[2]))
         q = self.q

@@ -10,6 +10,7 @@ import os
 
 LOOP_RATE = 64
 UPDATE_RATE = 16
+DEFAULT_LABEL = "Idle"
 
 class Node:
     """A node is an edge of the cuboid"""
@@ -104,7 +105,7 @@ def initialize_cuboid():
     return cuboid
 
 def remove_gravity(acc, gyro, vis):
-    """Remove gravity for one hand and one occasion."""
+    """Remove gravity for one hand."""
     # Initialize
     cuboid = initialize_cuboid()
     madgwick = MadgwickFusion(cuboid.q, LOOP_RATE)
@@ -132,6 +133,22 @@ def remove_gravity(acc, gyro, vis):
         i += 1
     return acc_0
 
+def get_labels(annotations, timestamps):
+    """Infer labels from annotations and timestamps"""
+    num = len(timestamps)
+    labels_1 = np.empty(num, dtype='U25'); labels_1.fill(DEFAULT_LABEL)
+    labels_2 = np.empty(num, dtype='U25'); labels_2.fill(DEFAULT_LABEL)
+    labels_3 = np.empty(num, dtype='U25'); labels_3.fill(DEFAULT_LABEL)
+    labels_4 = np.empty(num, dtype='U25'); labels_4.fill(DEFAULT_LABEL)
+    for start_time, end_time, label_1, label_2, label_3, label_4 in zip(*annotations):
+        start_frame = np.argmax(np.array(timestamps) >= start_time)
+        end_frame = np.argmax(np.array(timestamps) > end_time)
+        labels_1[start_frame:end_frame] = label_1
+        labels_2[start_frame:end_frame] = label_2
+        labels_3[start_frame:end_frame] = label_3
+        labels_4[start_frame:end_frame] = label_4
+    return list(labels_1), list(labels_2), list(labels_3), list(labels_4)
+
 def main(args=None):
     """Main"""
     # For Unisens data
@@ -140,23 +157,23 @@ def main(args=None):
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = UnisensReader()
         for subject_id in subject_ids:
-            # Stitch path together
-            src_dir = os.path.join(args.src_dir, subject_id, "data_sensor")
             # Read acc and gyro
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
-                reader.read(src_dir)
+                reader.read_inert(args.src_dir, subject_id)
             # Remove gravity from acceleration vector
             left_acc_0 = remove_gravity(left_acc, left_gyro, args.vis)
             right_acc_0 = remove_gravity(right_acc, right_gyro, args.vis)
-            # Read labels
-            # TODO
+            # Read annotations
+            annotations = reader.read_annotations(args.src_dir, subject_id)
+            label_1, label_2, label_3, label_4 = get_labels(annotations, timestamps)
             # Write csv
             if not os.path.exists(args.exp_dir):
                 os.makedirs(args.exp_dir)
             exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
             writer = TwoHandsWriter(exp_path)
             writer.write(subject_id, timestamps, left_acc, left_acc_0,
-                left_gyro, right_acc, right_acc_0, right_gyro)
+                left_gyro, right_acc, right_acc_0, right_gyro, label_1,
+                label_2, label_3, label_4)
         reader.done()
 
     else:

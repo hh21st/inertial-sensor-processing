@@ -1,9 +1,10 @@
 import csv
+import os
 import math
 import jpype
 import jpype.imports
 import numpy as np
-from datetime import timedelta, time, datetime
+import datetime as dt
 
 OREBA_FREQUENCY = 64
 
@@ -13,12 +14,13 @@ class UnisensReader:
         jpype.addClassPath('org.unisens.ri.jar')
         jpype.startJVM()
 
-    def read(self, dir):
+    def read_inert(self, src_dir, subject_id):
         def _parse_j2py(jpype_x, jpype_y, jpype_z):
             """Convert from double[][] to list"""
             return list(zip([list(i)[0] for i in jpype_x],
                             [list(i)[0] for i in jpype_y],
                             [list(i)[0] for i in jpype_z]))
+        dir = os.path.join(src_dir, subject_id, "data_sensor")
         from org.unisens import UnisensFactoryBuilder
         jUnisensFactory = UnisensFactoryBuilder.createFactory()
         jUnisens = jUnisensFactory.createUnisens(dir)
@@ -48,12 +50,30 @@ class UnisensReader:
         right_gyro = _parse_j2py(jRightGyroXEntry.readScaled(count),
                                  jRightGyroYEntry.readScaled(count),
                                  jRightGyroZEntry.readScaled(count))
-        def _format_time(t):
-            return (datetime.min + timedelta(microseconds=t)).time().strftime('%H:%M:%S.%f')
         dt = 1000000 // OREBA_FREQUENCY
-        timestamps = [_format_time(t) for t in range(0, count*dt, dt)]
+        timestamps = range(0, count*dt, dt)
         # TODO read dom_hand information
         return timestamps, left_acc, left_gyro, right_acc, right_gyro
+
+    def read_annotations(self, src_dir, subject_id):
+        def _time_to_ms(time):
+            t = dt.datetime.strptime(time, '%M:%S.%f')
+            return t.minute * 60 * 1000 * 1000 + t.second * 1000 * 1000 \
+                + t.microsecond
+        path = os.path.join(src_dir, subject_id, subject_id + "_annotations.csv")
+        assert os.path.isfile(path), "Couldn't find annotations file"
+        start_time, end_time = [], []
+        label_1, label_2, label_3, label_4 = [], [], [], []
+        with open(path) as dest_f:
+            next(dest_f)
+            for row in csv.reader(dest_f, delimiter=','):
+                start_time.append(_time_to_ms(row[0]))
+                end_time.append(_time_to_ms(row[1]))
+                label_1.append(row[4])
+                label_2.append(row[5])
+                label_3.append(row[6])
+                label_4.append(row[7])
+        return [start_time, end_time, label_1, label_2, label_3, label_4]
 
     def done(self):
         jpype.shutdownJVM()
