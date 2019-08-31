@@ -137,6 +137,18 @@ def remove_gravity(acc, gyro, vis):
         i += 1
     return acc_0
 
+def standardize(left_acc, left_gyro, right_acc, right_gyro):
+    def _standardize(x):
+        np_x = np.array(x)
+        np_x -= np.mean(np_x, axis=0)
+        np_x /= np.std(np_x)
+        return list(np_x)
+    left_acc = _standardize(left_acc)
+    left_gyro = _standardize(left_gyro)
+    right_acc = _standardize(right_acc)
+    right_gyro = _standardize(right_gyro)
+    return left_acc, left_gyro, right_acc, right_gyro
+
 def get_labels(annotations, timestamps):
     """Infer labels from annotations and timestamps"""
     num = len(timestamps)
@@ -169,12 +181,14 @@ def main(args=None):
             # Remove gravity from acceleration vector
             left_acc_0 = remove_gravity(left_acc, left_gyro, args.vis)
             right_acc_0 = remove_gravity(right_acc, right_gyro, args.vis)
+            # Standardize
+            left_acc_0, left_gyro_0, right_acc_0, right_gyro_0 = \
+                standardize(left_acc_0, left_gyro, right_acc_0, right_gyro)
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = get_labels(annotations, timestamps)
             dominant_hand = reader.read_dominant(args.src_dir, subject_id)
             # Write csv
-
             if args.exp_dir == args.src_dir:
                 exp_path = os.path.join(args.exp_dir, subject_id, subject_id + "_inert.csv")
             else:
@@ -183,8 +197,8 @@ def main(args=None):
                 exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
             writer = TwoHandsWriter(exp_path)
             writer.write(subject_id, timestamps, left_acc, left_acc_0,
-                left_gyro, right_acc, right_acc_0, right_gyro, dominant_hand,
-                label_1, label_2, label_3, label_4)
+                left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
+                right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
         reader.done()
 
     else:
