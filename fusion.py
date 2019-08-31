@@ -7,12 +7,11 @@ class MadgwickFusion:
     def __init__(self, q, dt):
         self.q = q
         self.dt = dt
-        GyroMeanError = radians(20)
-        self.beta = sqrt(3.0 / 4.0) * GyroMeanError
+        self.beta = 0.25
 
     def update(self, acc, gyro):
         a = np.quaternion(0, acc[0], acc[1], acc[2]).normalized()
-        g = np.quaternion(0, gyro[0], gyro[1], gyro[2])
+        g = np.quaternion(0, radians(gyro[0]), radians(gyro[1]), radians(gyro[2]))
         q = self.q
 
         # Temp variables
@@ -21,7 +20,7 @@ class MadgwickFusion:
         _8qx, _8qy  = 8 * q.x, 8 * q.y
         qwqw, qxqx, qyqy, qzqz = q.w * q.w, q.x * q.x, q.y * q.y, q.z * q.z
 
-        # Gradient decent step
+        # Gradient descent step
         s = np.quaternion(
             _4qw * qyqy + _2qy * a.x + _4qw * qxqx - _2qx * a.y,
             _4qx * qzqz - _2qz * a.x + 4 * qwqw * q.x - _2qw * a.y - _4qx + _8qx * qxqx + _8qx * qyqy + _4qx * a.z,

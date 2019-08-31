@@ -1,28 +1,32 @@
 import numpy as np
 import quaternion
-import visualization as vis
+from visualization import PygameViewer
 from fusion import MadgwickFusion
-from reader import OrebaReader
+from reader import UnisensReader
+from writer import TwoHandsWriter
+import csv
+import argparse
+import os
 
 LOOP_RATE = 64
 UPDATE_RATE = 16
 
-# A node is an edge of the cuboid
 class Node:
+    """A node is an edge of the cuboid"""
     def __init__(self, coords, color):
         self.x = coords[0]
         self.y = coords[1]
         self.z = coords[2]
         self.color = color
 
-# A face of the cuboid is defined using the indices of four nodes
 class Face:
+    """A face of the cuboid is defined using the indices of four nodes"""
     def __init__(self, nodeIdxs, color):
         self.nodeIdxs = nodeIdxs
         self.color = color
 
-# The cuboid
 class Cuboid:
+    """The cuboid"""
     def __init__(self):
         self.nodes = []
         self.faces = []
@@ -70,6 +74,7 @@ class Cuboid:
         return yaw, pitch, roll
 
 def initialize_cuboid():
+    """Initialize cuboid with nodes and faces"""
 
     # The cuboid
     cuboid = Cuboid()
@@ -98,23 +103,72 @@ def initialize_cuboid():
 
     return cuboid
 
-def process():
+def remove_gravity(acc, gyro, vis):
+    """Remove gravity for one hand and one occasion."""
+    # Initialize
     cuboid = initialize_cuboid()
-    reader = OrebaReader('1004_sensorexport.csv')
     madgwick = MadgwickFusion(cuboid.q, LOOP_RATE)
-    acc, gyro = reader.read_inert()
-    pv = vis.PygameViewer(640, 480, cuboid, UPDATE_RATE)
-    running = True
+    # Initialize visualization
+    pv = None
+    if vis == 'True':
+        pv = PygameViewer(640, 480, cuboid, UPDATE_RATE)
+    # Process
+    acc_0 = []
     i = 0
     for acc_t, gyro_t in zip(acc, gyro):
         # Sensor fusion update
         madgwick.update(acc_t, gyro_t)
         cuboid.set_quaternion(madgwick.q)
-        # Update screen every
-        if i % (LOOP_RATE//UPDATE_RATE) == 0:
-            if not pv.update():
-                break
+        # Remove gravity from acceleration
+        acc_t0 = quaternion.rotate_vectors(madgwick.q, np.array(acc_t))
+        acc_t0 -= np.array([0, 0, 1])
+        acc_t0 = quaternion.rotate_vectors(madgwick.q.inverse(), acc_t0)
+        acc_0.append(acc_t0.tolist())
+        # Update screen according to update rate
+        if vis == 'True':
+            if i % (LOOP_RATE//UPDATE_RATE) == 0:
+                if not pv.update():
+                    break
         i += 1
+    return acc_0
+
+def main(args=None):
+    """Main"""
+    # For Unisens data
+    if args.reader == 'Unisens':
+        # Read subjects
+        subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
+        reader = UnisensReader()
+        for subject_id in subject_ids:
+            # Stitch path together
+            src_dir = os.path.join(args.src_dir, subject_id, "data_sensor")
+            # Read acc and gyro
+            timestamps, left_acc, left_gyro, right_acc, right_gyro = \
+                reader.read(src_dir)
+            # Remove gravity from acceleration vector
+            left_acc_0 = remove_gravity(left_acc, left_gyro, args.vis)
+            right_acc_0 = remove_gravity(right_acc, right_gyro, args.vis)
+            # Read labels
+            # TODO
+            # Write csv
+            if not os.path.exists(args.exp_dir):
+                os.makedirs(args.exp_dir)
+            exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
+            writer = TwoHandsWriter(exp_path)
+            writer.write(subject_id, timestamps, left_acc, left_acc_0,
+                left_gyro, right_acc, right_acc_0, right_gyro)
+        reader.done()
+
+    else:
+        raise RunimeError('No valid reader selected')
+
+    # TODO: Get dominant hand
 
 if __name__ == '__main__':
-    process()
+    parser = argparse.ArgumentParser(description='Process inertial sensor data')
+    parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
+    parser.add_argument('--exp_dir', type=str, default='export', nargs='?', help='Directory for data export.')
+    parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?')
+    parser.add_argument('--reader', choices=('Unisens', 'Clemson', 'FIC'), default='Unisens', nargs='?')
+    args = parser.parse_args()
+    main(args)
