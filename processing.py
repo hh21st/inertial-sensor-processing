@@ -2,16 +2,16 @@ import numpy as np
 import quaternion
 from visualization import PygameViewer
 from fusion import MadgwickFusion
-from reader import UnisensReader
-from writer import TwoHandsWriter
+from reader import OrebaReader, ClemsonReader
+from writer import OrebaWriter, ClemsonWriter
 import csv
 import argparse
 import os
 import logging
 
-LOOP_RATE = 64
+OREBA_FREQUENCY = 64
+CLEMSON_FREQUENCY = 15
 UPDATE_RATE = 16
-DEFAULT_LABEL = "Idle"
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
@@ -107,16 +107,16 @@ def initialize_cuboid():
 
     return cuboid
 
-def remove_gravity(acc, gyro, vis):
+def remove_gravity(acc, gyro, data_freq, update_freq, vis):
     """Remove gravity for one hand."""
     logging.info("Removing gravity")
     # Initialize
     cuboid = initialize_cuboid()
-    madgwick = MadgwickFusion(cuboid.q, LOOP_RATE)
+    madgwick = MadgwickFusion(cuboid.q, data_freq)
     # Initialize visualization
     pv = None
     if vis == 'True':
-        pv = PygameViewer(640, 480, cuboid, UPDATE_RATE)
+        pv = PygameViewer(640, 480, cuboid, data_freq)
     # Process
     acc_0 = []
     i = 0
@@ -131,86 +131,115 @@ def remove_gravity(acc, gyro, vis):
         acc_0.append(acc_t0.tolist())
         # Update screen according to update rate
         if vis == 'True':
-            if i % (LOOP_RATE//UPDATE_RATE) == 0:
+            if i % (data_freq//update_freq) == 0:
                 if not pv.update():
                     break
         i += 1
     return acc_0
 
-def standardize(left_acc, left_gyro, right_acc, right_gyro):
-    def _standardize(x):
-        np_x = np.array(x)
-        np_x -= np.mean(np_x, axis=0)
-        np_x /= np.std(np_x)
-        return list(np_x)
-    left_acc = _standardize(left_acc)
-    left_gyro = _standardize(left_gyro)
-    right_acc = _standardize(right_acc)
-    right_gyro = _standardize(right_gyro)
-    return left_acc, left_gyro, right_acc, right_gyro
-
-def get_labels(annotations, timestamps):
-    """Infer labels from annotations and timestamps"""
-    num = len(timestamps)
-    labels_1 = np.empty(num, dtype='U25'); labels_1.fill(DEFAULT_LABEL)
-    labels_2 = np.empty(num, dtype='U25'); labels_2.fill(DEFAULT_LABEL)
-    labels_3 = np.empty(num, dtype='U25'); labels_3.fill(DEFAULT_LABEL)
-    labels_4 = np.empty(num, dtype='U25'); labels_4.fill(DEFAULT_LABEL)
-    for start_time, end_time, label_1, label_2, label_3, label_4 in zip(*annotations):
-        start_frame = np.argmax(np.array(timestamps) >= start_time)
-        end_frame = np.argmax(np.array(timestamps) > end_time)
-        labels_1[start_frame:end_frame] = label_1
-        labels_2[start_frame:end_frame] = label_2
-        labels_3[start_frame:end_frame] = label_3
-        labels_4[start_frame:end_frame] = label_4
-    return list(labels_1), list(labels_2), list(labels_3), list(labels_4)
+def standardize(x):
+    np_x = np.array(x)
+    np_x -= np.mean(np_x, axis=0)
+    np_x /= np.std(np_x)
+    return list(np_x)
 
 def main(args=None):
     """Main"""
     # For Unisens data
-    if args.reader == 'Unisens':
+    if args.reader == 'Oreba':
         # Read subjects
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
-        reader = UnisensReader()
+        reader = OrebaReader()
         for subject_id in subject_ids:
             logging.info("Working on subject {}".format(subject_id))
-            # Read acc and gyro
-            logging.info("Reading raw data from Unisens")
-            timestamps, left_acc, left_gyro, right_acc, right_gyro = \
-                reader.read_inert(args.src_dir, subject_id)
-            # Remove gravity from acceleration vector
-            left_acc_0 = remove_gravity(left_acc, left_gyro, args.vis)
-            right_acc_0 = remove_gravity(right_acc, right_gyro, args.vis)
-            # Standardize
-            left_acc_0, left_gyro_0, right_acc_0, right_gyro_0 = \
-                standardize(left_acc_0, left_gyro, right_acc_0, right_gyro)
-            # Read annotations
-            annotations = reader.read_annotations(args.src_dir, subject_id)
-            label_1, label_2, label_3, label_4 = get_labels(annotations, timestamps)
-            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
-            # Write csv
             if args.exp_dir == args.src_dir:
                 exp_path = os.path.join(args.exp_dir, subject_id, subject_id + "_inert.csv")
             else:
                 if not os.path.exists(args.exp_dir):
                     os.makedirs(args.exp_dir)
                 exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
-            writer = TwoHandsWriter(exp_path)
+            if os.path.isfile(exp_path):
+                logging.info("Dataset file already exists. Skipping {0}.".format(subject_id))
+                continue
+            # Read acc and gyro
+            logging.info("Reading raw data from Unisens")
+            timestamps, left_acc, left_gyro, right_acc, right_gyro = \
+                reader.read_inert(args.src_dir, subject_id)
+            # Remove gravity from acceleration vector
+            left_acc_0 = remove_gravity(left_acc, left_gyro, OREBA_FREQUENCY, 16, args.vis)
+            right_acc_0 = remove_gravity(right_acc, right_gyro, OREBA_FREQUENCY, 16, args.vis)
+            # Standardize
+            left_acc_0 = standardize(left_acc_0)
+            left_gyro_0 = standardize(left_gyro)
+            right_acc_0 = standardize(right_acc_0)
+            right_gyro_0 = standardize(right_gyro)
+            # Read annotations
+            annotations = reader.read_annotations(args.src_dir, subject_id)
+            label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
+            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
+            # Write csv
+            writer = OrebaWriter(exp_path)
             writer.write(subject_id, timestamps, left_acc, left_acc_0,
                 left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
                 right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
         reader.done()
 
+    # For Clemson Cafeteria data
+    elif args.reader == 'Clemson':
+        # Read subjects
+        data_dir = os.path.join(args.src_dir, "all-data")
+        subject_ids = [x for x in next(os.walk(data_dir))[1]]
+        reader = ClemsonReader()
+        for subject_id in subject_ids:
+            subject_dir = os.path.join(data_dir, subject_id)
+            sessions = [x for x in next(os.walk(subject_dir))[1]]
+            for session in sessions:
+                logging.info("Working on subject {}, session {}".format(subject_id, session))
+                # Make sure export dir exists
+                if not os.path.exists(args.exp_dir):
+                    os.makedirs(args.exp_dir)
+                exp_path = os.path.join(args.exp_dir, subject_id + "_" + session + ".csv")
+                # Skip if export file already exists
+                if os.path.isfile(exp_path):
+                    logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session))
+                    continue
+                # Path of gesture annotations
+                gesture_dir = os.path.join(args.src_dir, "all-gt-gestures", subject_id,
+                    session, "gesture_union.txt")
+                if not os.path.isfile(gesture_dir):
+                    logging.warn("No gesture annotations found. Skipping {}_{}.".format(
+                        subject_id, session))
+                    continue
+                # Path of bite annotations
+                bite_dir = os.path.join(args.src_dir, "all-gt-bites", subject_id,
+                    session, "gt_union.txt")
+                if not os.path.isfile(bite_dir):
+                    logging.warn("No bite annotations found. Skipping {}_{}.".format(
+                        subject_id, session))
+                # Read acc and gyro
+                timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
+                # Remove gravity from acceleration vector
+                acc_0 = remove_gravity(acc, gyro, CLEMSON_FREQUENCY, 15, args.vis)
+                # Standardize
+                acc_0 = standardize(acc_0)
+                gyro_0 = standardize(gyro)
+                # Read annotations
+                annotations = reader.read_annotations(gesture_dir, bite_dir)
+                label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
+                # Write csv
+                writer = ClemsonWriter(exp_path)
+                writer.write(subject_id, session, timestamps, acc, acc_0, gyro,
+                    gyro_0, label_1, label_2, label_3, label_4, label_5)
+
     else:
         raise RunimeError('No valid reader selected')
-
-    # TODO: Get dominant hand
+    logging.info("Done")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default='export', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?')
-    parser.add_argument('--reader', choices=('Unisens', 'Clemson', 'FIC'), default='Unisens', nargs='?')
+    parser.add_argument('--reader', choices=('Oreba', 'Clemson', 'FIC'), default='Oreba', nargs='?')
     args = parser.parse_args()
     main(args)
