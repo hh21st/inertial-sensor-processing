@@ -7,6 +7,8 @@ import numpy as np
 import datetime as dt
 import xml.etree.cElementTree as etree
 import glob
+import h5py
+import pickle
 
 OREBA_FREQUENCY = 64
 OREBA_DEFAULT_LABEL = "Idle"
@@ -14,6 +16,7 @@ CLEMSON_FREQUENCY = 15
 CLEMSON_ACC_SENSITIVITY = 660.0
 CLEMSON_GYRO_SENSITIVITY = 2.5
 CLEMSON_DEFAULT_LABEL = "Idle"
+FIC_DEFAULT_LABEL = "Idle"
 
 class OrebaReader:
     def __init__(self):
@@ -120,11 +123,11 @@ class ClemsonReader:
                 acc_y = (float(row[1]) - 1.65) * 1000.0 / CLEMSON_ACC_SENSITIVITY
                 acc_z = (float(row[2]) - 1.65) * 1000.0 / CLEMSON_ACC_SENSITIVITY
                 acc.append([acc_x, acc_y, acc_z])
+                # Todo estimate zero rate output mean instead of simply using 1.25!
                 gyro_x = (float(row[3])-1.25) * 1000.0 / CLEMSON_GYRO_SENSITIVITY
                 gyro_y = (float(row[4])-1.25) * 1000.0 / CLEMSON_GYRO_SENSITIVITY
                 gyro_z = (float(row[5])-1.25) * 1000.0 / CLEMSON_GYRO_SENSITIVITY
                 gyro.append([gyro_x, gyro_y, gyro_z])
-                # TODO remove zero rate output
         dt = 1000000 // CLEMSON_FREQUENCY
         timestamps = range(0, len(acc)*dt, dt)
         return timestamps, acc, gyro
@@ -185,3 +188,19 @@ class ClemsonReader:
             labels_4[start_frame:end_frame] = label_4
             labels_5[start_frame:end_frame] = label_5
         return list(labels_1), list(labels_2), list(labels_3), list(labels_4), list(labels_5)
+
+class FICReader:
+    def read_pickle(self, path):
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        return data
+
+    def get_labels(self, annotations, timestamps):
+        """Infer labels from annotations and timestamps"""
+        num = len(timestamps)
+        labels_1 = np.empty(num, dtype='U25'); labels_1.fill(FIC_DEFAULT_LABEL)
+        for start_time, end_time in annotations:
+            start_frame = np.argmax(np.array(timestamps) >= start_time)
+            end_frame = np.argmax(np.array(timestamps) > end_time)
+            labels_1[start_frame:end_frame] = "Intake"
+        return list(labels_1)

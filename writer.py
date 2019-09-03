@@ -65,3 +65,28 @@ class ClemsonWriter:
                     gyro[i][1], gyro[i][2], gyro_0[i][0], gyro_0[i][1],
                     gyro_0[i][2], label_1[i], label_2[i], label_3[i],
                     label_4[i], label_5[i]])
+
+class FICWriter:
+    def __init__(self, path):
+        self.path = path
+
+    def write(self, subject_id, session_id, timestamps, acc, acc_0, gyro,
+        gyro_0, label_1):
+        frame_ids = range(0, len(timestamps))
+        subject_ids = [subject_id] * len(timestamps)
+        session_ids = [session_id] * len(timestamps)
+        def _format_time(t):
+            return (datetime.min + timedelta(milliseconds=t)).time().strftime('%H:%M:%S.%f')
+        timestamps = [_format_time(t) for t in timestamps]
+        with open(self.path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow(["subject_id", "session_id", "frame_id",
+                "timestamp", "acc_x", "acc_y", "acc_z", "acc_x_0", "acc_y_0",
+                "acc_z_0", "gyro_x", "gyro_y", "gyro_z", "gyro_x_0",
+                "gyro_y_0", "gyro_z_0", "label_1"])
+            for i in range(0, len(timestamps)):
+                writer.writerow([subject_ids[i], session_ids[i], frame_ids[i],
+                    timestamps[i], acc[i][0], acc[i][1], acc[i][2],
+                    acc_0[i][0], acc_0[i][1], acc_0[i][2], gyro[i][0],
+                    gyro[i][1], gyro[i][2], gyro_0[i][0], gyro_0[i][1],
+                    gyro_0[i][2], label_1[i]])

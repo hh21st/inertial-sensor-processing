@@ -2,16 +2,20 @@ import numpy as np
 import quaternion
 from visualization import PygameViewer
 from fusion import MadgwickFusion
-from reader import OrebaReader, ClemsonReader
-from writer import OrebaWriter, ClemsonWriter
+from reader import OrebaReader, ClemsonReader, FICReader
+from writer import OrebaWriter, ClemsonWriter, FICWriter
 import csv
 import argparse
 import os
 import logging
+from scipy import signal
 
 OREBA_FREQUENCY = 64
 CLEMSON_FREQUENCY = 15
+FIC_FREQUENCY = 64
 UPDATE_RATE = 16
+FACTOR_MILLIS = 1000
+FACTOR_NANOS = 1000000000
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
@@ -145,8 +149,8 @@ def standardize(x):
 
 def main(args=None):
     """Main"""
-    # For Unisens data
     if args.reader == 'Oreba':
+        # For OREBA data
         # Read subjects
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = OrebaReader()
@@ -184,8 +188,8 @@ def main(args=None):
                 right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
         reader.done()
 
-    # For Clemson Cafeteria data
     elif args.reader == 'Clemson':
+        # For Clemson Cafeteria data
         # Read subjects
         data_dir = os.path.join(args.src_dir, "all-data")
         subject_ids = [x for x in next(os.walk(data_dir))[1]]
@@ -230,6 +234,65 @@ def main(args=None):
                 writer = ClemsonWriter(exp_path)
                 writer.write(subject_id, session, timestamps, acc, acc_0, gyro,
                     gyro_0, label_1, label_2, label_3, label_4, label_5)
+
+    elif args.reader == "FIC":
+        # For Food Intake Cycle (FIC) dataset
+        # Make sure HDF5 file exists
+        pickle_path = os.path.join(args.src_dir, "fic_pickle.pkl")
+        if not os.path.isfile(pickle_path):
+            raise RunimeError('Pickle file not found')
+        reader = FICReader()
+        data = reader.read_pickle(pickle_path)
+        for i in range(0, len(data['subject_id'])):
+            subject_id = data['subject_id'][i]
+            session_id = data['session_id'][i]
+            metadata = data['metadata'][i]
+            logging.info("Working on subject {}, session {}".format(subject_id, session_id))
+            # Make sure export dir exists
+            if not os.path.exists(args.exp_dir):
+                os.makedirs(args.exp_dir)
+            exp_path = os.path.join(args.exp_dir, str(subject_id) + "_" + str(session_id) + ".csv")
+            # Skip if export file already exists
+            if os.path.isfile(exp_path):
+                logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session_id))
+                continue
+            # Read acc and gyro
+            acc = data['raw_signals'][i]['accelerometer']
+            gyro = data['raw_signals'][i]['gyroscope']
+            # Determine start_time as first time available for both sensors
+            start_time = np.max([acc[0,0], gyro[0,0]])
+            end_time = np.min([acc[acc.shape[0]-1,0], gyro[gyro.shape[0]-1,0]])
+            total_time = end_time - start_time
+            # Number of samples after resampling
+            if metadata['timestamps_raw_units'] == 'millis':
+                factor = FACTOR_MILLIS
+                calc_factor = 1000000
+            else:
+                factor = FACTOR_NANOS
+                calc_factor = 1
+            num = int(total_time / (1 / FIC_FREQUENCY * factor))
+            # Trim and resample acc
+            acc = acc[np.where(acc==start_time)[0][0]:np.where(acc==end_time)[0][0],1:4]
+            acc_res = signal.resample(acc, num)
+            # Trim and resample acc
+            gyro = gyro[np.where(gyro==start_time)[0][0]:np.where(gyro==end_time)[0][0],1:4]
+            gyro_res = signal.resample(gyro, num)
+            # Derive evenly spaced timestamps
+            dt = factor / FIC_FREQUENCY
+            timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
+            timestamps = np.array(timestamps / calc_factor)
+            # Remove gravity from acceleration vector
+            acc_0 = remove_gravity(acc_res, gyro_res, FIC_FREQUENCY, 16, args.vis)
+            # Standardize
+            acc_0 = standardize(acc_0)
+            gyro_0 = standardize(gyro_res)
+            # Read annotations
+            annotations = data['bite_gt'][i]
+            label_1 = reader.get_labels(annotations, timestamps)
+            # Write csv
+            writer = FICWriter(exp_path)
+            writer.write(subject_id, session_id, timestamps, acc_res, acc_0,
+                gyro_res, gyro_0, label_1)
 
     else:
         raise RunimeError('No valid reader selected')
