@@ -9,7 +9,7 @@ import argparse
 import os
 import logging
 from scipy import signal
-from math import radians
+from math import radians, degrees
 import itertools
 
 OREBA_FREQUENCY = 64
@@ -18,6 +18,7 @@ FIC_FREQUENCY = 64
 UPDATE_RATE = 16
 FACTOR_MILLIS = 1000
 FACTOR_NANOS = 1000000000
+GRAVITY = 9.80665
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
@@ -165,7 +166,7 @@ def standardize(x):
     return list(np_x)
 
 def smoothe(x, size=15, order=3):
-    return signal.savgol_filter(x, size, order)
+    return signal.savgol_filter(x, size, order, axis=0)
 
 def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
     """Preprocess the data"""
@@ -194,7 +195,7 @@ def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
     return acc, gyro
 
 def decimate(acc, gyro, timestamps, target_rate, original_rate):
-    """"""
+    """Decimate the data"""
     if original_rate % target_rate == 0:
         factor = original_rate // target_rate
         if factor == 1:
@@ -264,9 +265,14 @@ def main(args=None):
             dominant_hand = reader.read_dominant(args.src_dir, subject_id)
             # Write csv
             writer = OrebaWriter(exp_path)
-            writer.write(subject_id, timestamps, left_acc, left_acc_0,
-                left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
-                right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
+            if args.write_mode == 'dev':
+                writer.write_dev(subject_id, timestamps, left_acc_0,
+                    left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
+                    label_1, label_2, label_3, label_4)
+            else:
+                writer.write_pub(subject_id, timestamps, left_acc, left_acc_0,
+                    left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
+                    right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
         reader.done()
 
     elif args.database == 'Clemson':
@@ -311,12 +317,17 @@ def main(args=None):
                 label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
                 # Write csv
                 writer = ClemsonWriter(exp_path)
-                writer.write(subject_id, session, timestamps, acc, acc_0, gyro,
-                    gyro_0, label_1, label_2, label_3, label_4, label_5)
+                if args.write_mode == 'dev':
+                    writer.write_dev(subject_id, session, timestamps, acc_0,
+                        gyro_0, label_1, label_2, label_3, label_4, label_5)
+                else:
+                    writer.write_pub(subject_id, session, timestamps, acc,
+                        acc_0, gyro, gyro_0, label_1, label_2, label_3,
+                        label_4, label_5)
 
     elif args.database == "FIC":
         # For Food Intake Cycle (FIC) dataset
-        # Make sure HDF5 file exists
+        # Make sure pickle file exists
         pickle_path = os.path.join(args.src_dir, "fic_pickle.pkl")
         if not os.path.isfile(pickle_path):
             raise RunimeError('Pickle file not found')
@@ -345,6 +356,11 @@ def main(args=None):
             total_time = end_time - start_time
             acc = acc[np.where(acc==start_time)[0][0]:np.where(acc==end_time)[0][0],1:4]
             gyro = gyro[np.where(gyro==start_time)[0][0]:np.where(gyro==end_time)[0][0],1:4]
+            # Convert gyro to deg/s if necessary
+            if metadata['gyroscope_raw_units'] == 'rad/sec':
+                gyro = np.degrees(gyro)
+            if metadata['accelerometer_raw_units'] == 'm/s^2':
+                acc /= GRAVITY
             # Resample
             timestamps, acc, gyro = resample(acc, gyro, args.sampling_rate,
                 metadata['timestamps_raw_units'], total_time)
@@ -356,8 +372,12 @@ def main(args=None):
             label_1 = reader.get_labels(annotations, timestamps)
             # Write csv
             writer = FICWriter(exp_path)
-            writer.write(subject_id, session_id, timestamps, acc_res, acc_0,
-                gyro_res, gyro_0, label_1)
+            if args.write_mode == 'dev':
+                writer.write_dev(subject_id, session_id, timestamps, acc_0,
+                    gyro_0, label_1, metadata['timestamps_raw_units'])
+            else:
+                writer.write_pub(subject_id, session_id, timestamps, acc,
+                    acc_0, gyro, gyro_0, label_1, metadata['timestamps_raw_units'])
 
     else:
         raise RuntimeError('No valid reader selected')
@@ -372,5 +392,6 @@ if __name__ == '__main__':
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
+    parser.add_argument('--write_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     args = parser.parse_args()
     main(args)
