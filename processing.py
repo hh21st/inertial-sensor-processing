@@ -9,6 +9,8 @@ import argparse
 import os
 import logging
 from scipy import signal
+from math import radians
+import itertools
 
 OREBA_FREQUENCY = 64
 CLEMSON_FREQUENCY = 15
@@ -35,10 +37,10 @@ class Face:
 
 class Cuboid:
     """The cuboid"""
-    def __init__(self):
+    def __init__(self, quaternion):
         self.nodes = []
         self.faces = []
-        self.q = np.quaternion(1, 0, 0, 0) # Initial pose estimate
+        self.q = quaternion
 
     def set_nodes(self, nodes):
         self.nodes = nodes
@@ -81,11 +83,11 @@ class Cuboid:
         roll = _rad2deg(roll)
         return yaw, pitch, roll
 
-def initialize_cuboid():
+def initialize_cuboid(quaternion):
     """Initialize cuboid with nodes and faces"""
 
-    # The cuboid
-    cuboid = Cuboid()
+    # The cuboid with initial quaternion
+    cuboid = Cuboid(quaternion)
 
     # Define nodes
     nodes = []
@@ -111,11 +113,26 @@ def initialize_cuboid():
 
     return cuboid
 
-def remove_gravity(acc, gyro, data_freq, update_freq, vis):
+def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=30):
+    """Estimate the initital quaternion from evenly distributed possibilities"""
+    # Uniformly sampled possible initial quaternions
+    qs = [np.quaternion(1, radians(x), radians(y), radians(z)) for x, y, z in list(itertools.product( \
+            range(0, 180, inc_deg), range(0, 180, inc_deg), range(0, 180, inc_deg)))]
+    loss = []
+    for q in qs:
+        # Remove gravity for the first seconds
+        num = seconds * data_freq
+        q = np.quaternion(q)
+        # We are assuming that there is not much force except gravity
+        acc_0 = remove_gravity(acc[0:num], gyro[0:num], q, data_freq, 0, False)
+        # If gravity is successfully removed, absolute values are low
+        loss.append(np.sum(np.absolute(acc_0)))
+    return qs[np.argmin(loss)]
+
+def remove_gravity(acc, gyro, init_q, data_freq, update_freq, vis):
     """Remove gravity for one hand."""
-    logging.info("Removing gravity")
     # Initialize
-    cuboid = initialize_cuboid()
+    cuboid = initialize_cuboid(init_q)
     madgwick = MadgwickFusion(cuboid.q, data_freq)
     # Initialize visualization
     pv = None
@@ -169,9 +186,14 @@ def main(args=None):
             logging.info("Reading raw data from Unisens")
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
+            # Estimate initial quaternion
+            logging.info("Estimating initial quaternion")
+            left_init_q = estimate_initial_quaternion(left_acc, left_gyro, OREBA_FREQUENCY)
+            right_init_q = estimate_initial_quaternion(right_acc, right_gyro, OREBA_FREQUENCY)
             # Remove gravity from acceleration vector
-            left_acc_0 = remove_gravity(left_acc, left_gyro, OREBA_FREQUENCY, 16, args.vis)
-            right_acc_0 = remove_gravity(right_acc, right_gyro, OREBA_FREQUENCY, 16, args.vis)
+            logging.info("Removing gravity")
+            left_acc_0 = remove_gravity(left_acc, left_gyro, left_init_q, OREBA_FREQUENCY, 16, args.vis)
+            right_acc_0 = remove_gravity(right_acc, right_gyro, right_init_q, OREBA_FREQUENCY, 16, args.vis)
             # Standardize
             left_acc_0 = standardize(left_acc_0)
             left_gyro_0 = standardize(left_gyro)
@@ -222,8 +244,12 @@ def main(args=None):
                         subject_id, session))
                 # Read acc and gyro
                 timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
+                # Estimate initial quaternion
+                logging.info("Estimating initial quaternion")
+                init_q = estimate_initial_quaternion(acc, gyro, CLEMSON_FREQUENCY)
                 # Remove gravity from acceleration vector
-                acc_0 = remove_gravity(acc, gyro, CLEMSON_FREQUENCY, 15, args.vis)
+                logging.info("Removing gravity")
+                acc_0 = remove_gravity(acc, gyro, init_q, CLEMSON_FREQUENCY, 15, args.vis)
                 # Standardize
                 acc_0 = standardize(acc_0)
                 gyro_0 = standardize(gyro)
@@ -281,8 +307,12 @@ def main(args=None):
             dt = factor / FIC_FREQUENCY
             timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
             timestamps = np.array(timestamps / calc_factor)
+            # Estimate initial quaternion
+            logging.info("Estimating initial quaternion")
+            init_q = estimate_initial_quaternion(acc, gyro, FIC_FREQUENCY)
             # Remove gravity from acceleration vector
-            acc_0 = remove_gravity(acc_res, gyro_res, FIC_FREQUENCY, 16, args.vis)
+            logging.info("Removing gravity")
+            acc_0 = remove_gravity(acc_res, gyro_res, init_q, FIC_FREQUENCY, 16, args.vis)
             # Standardize
             acc_0 = standardize(acc_0)
             gyro_0 = standardize(gyro_res)
