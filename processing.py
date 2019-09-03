@@ -193,37 +193,42 @@ def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
 
     return acc, gyro
 
-def resample(acc, gyro, target_rate, decimate, timestamps=None, original_rate=None, units='millis', total_time=None):
-    """Resample data using target frequency"""
-    if decimate:
-        if original_rate % target_rate == 0:
-            acc = signal.decimate(acc, original_rate//target_rate)
-            gyro = signal.decimate(gyro, original_rate//target_rate)
-            timestamps = timestamps[::original_rate//target_rate].copy()
-        else:
-            raise RuntimeError('Cannot decimate for this target rate')
+def decimate(acc, gyro, timestamps, target_rate, original_rate):
+    """"""
+    if original_rate % target_rate == 0:
+        factor = original_rate // target_rate
+        if factor == 1:
+            return timestamps, acc, gyro
+        acc = signal.decimate(acc, factor, axis=0)
+        gyro = signal.decimate(gyro, factor, axis=0)
+        timestamps = timestamps[::factor]
+        return timestamps, acc, gyro
     else:
-        # Number of samples after resampling
-        if units == 'millis':
-            factor = FACTOR_MILLIS
-            calc_factor = 1000000
-        else:
-            factor = FACTOR_NANOS
-            calc_factor = 1
-        num = int(total_time / (1 / target_rate * factor))
-        # Resample
-        acc = signal.resample(acc, num)
-        gyro = signal.resample(gyro, num)
-        # Derive evenly spaced timestamps
-        dt = factor / target_rate
-        timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
-        timestamps = np.array(timestamps / calc_factor)
+        raise RuntimeError('Cannot decimate for this target rate')
+
+def resample(acc, gyro, target_rate, units, total_time):
+    """Resample data using target frequency"""
+    # Number of samples after resampling
+    if units == 'millis':
+        factor = FACTOR_MILLIS
+        calc_factor = 1000000
+    else:
+        factor = FACTOR_NANOS
+        calc_factor = 1
+    num = int(total_time / (1 / target_rate * factor))
+    # Resample
+    acc = signal.resample(acc, num)
+    gyro = signal.resample(gyro, num)
+    # Derive evenly spaced timestamps
+    dt = factor / target_rate
+    timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
+    timestamps = np.array(timestamps / calc_factor)
 
     return timestamps, acc, gyro
 
 def main(args=None):
     """Main"""
-    if args.reader == 'Oreba':
+    if args.database == 'Oreba':
         # For OREBA data
         # Read subjects
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
@@ -244,12 +249,10 @@ def main(args=None):
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
             # Resample
-            timestamps, left_acc, left_gyro = resample(left_acc, left_gyro,
-                args.sampling_rate, decimate=True, timestamps=timestamps,
-                original_rate=OREBA_FREQUENCY)
-            _, right_acc, right_gyro = resample(right_acc, right_gyro,
-                args.sampling_rate, decimate=True, timestamps=timestamps,
-                original_rate=OREBA_FREQUENCY)
+            timestamps, left_acc, left_gyro = decimate(left_acc, left_gyro,
+                timestamps, args.sampling_rate, OREBA_FREQUENCY)
+            _, right_acc, right_gyro = decimate(right_acc, right_gyro,
+                timestamps, args.sampling_rate, OREBA_FREQUENCY)
             # Preprocessing
             left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
                 args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
@@ -266,7 +269,7 @@ def main(args=None):
                 right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
         reader.done()
 
-    elif args.reader == 'Clemson':
+    elif args.database == 'Clemson':
         # For Clemson Cafeteria data
         # Read subjects
         data_dir = os.path.join(args.src_dir, "all-data")
@@ -311,7 +314,7 @@ def main(args=None):
                 writer.write(subject_id, session, timestamps, acc, acc_0, gyro,
                     gyro_0, label_1, label_2, label_3, label_4, label_5)
 
-    elif args.reader == "FIC":
+    elif args.database == "FIC":
         # For Food Intake Cycle (FIC) dataset
         # Make sure HDF5 file exists
         pickle_path = os.path.join(args.src_dir, "fic_pickle.pkl")
@@ -344,8 +347,7 @@ def main(args=None):
             gyro = gyro[np.where(gyro==start_time)[0][0]:np.where(gyro==end_time)[0][0],1:4]
             # Resample
             timestamps, acc, gyro = resample(acc, gyro, args.sampling_rate,
-                decimate=False, units=metadata['timestamps_raw_units'],
-                total_time=total_time)
+                metadata['timestamps_raw_units'], total_time)
             # Preprocessing
             acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
                 args.smo_window_size, args.preprocess, args.vis)
