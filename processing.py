@@ -113,7 +113,7 @@ def initialize_cuboid(quaternion):
 
     return cuboid
 
-def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=30):
+def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=20):
     """Estimate the initital quaternion from evenly distributed possibilities"""
     # Uniformly sampled possible initial quaternions
     qs = [np.quaternion(1, radians(x), radians(y), radians(z)) for x, y, z in list(itertools.product( \
@@ -164,6 +164,40 @@ def standardize(x):
     np_x /= np.std(np_x)
     return list(np_x)
 
+def smoothe(x, size=15, order=3):
+    return signal.savgol_filter(x, size, order)
+
+def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
+    """Preprocess the data"""
+    if mode == 'raw':
+        return acc, gyro
+    # 1. Remove gravity
+    # 1.1 Estimate initial quaternion
+    logging.info("Estimating initial quaternion")
+    init_q = estimate_initial_quaternion(acc, gyro, sampling_rate)
+    # 1.2 Remove gravity
+    logging.info("Removing gravity")
+    acc = remove_gravity(acc, gyro, init_q, sampling_rate, 16, vis)
+    if mode == 'grm':
+        return acc, gyro
+    # 2. Smoothing
+    def _down_to_odd_integer(f):
+        return int(np.ceil(f) // 2 * 2 + 1)
+    acc = smoothe(acc, _down_to_odd_integer(smo_window_size * sampling_rate))
+    gyro = smoothe(gyro, _down_to_odd_integer(smo_window_size * sampling_rate))
+    if mode == 'smo':
+        return acc, gyro
+    # 3. Standardize
+    acc = standardize(acc)
+    gyro = standardize(gyro)
+
+    return acc, gyro
+
+def resample(x, target_freq):
+    """Resample data using target frequency"""
+    # TODO implement
+    return None
+
 def main(args=None):
     """Main"""
     if args.reader == 'Oreba':
@@ -186,19 +220,11 @@ def main(args=None):
             logging.info("Reading raw data from Unisens")
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
-            # Estimate initial quaternion
-            logging.info("Estimating initial quaternion")
-            left_init_q = estimate_initial_quaternion(left_acc, left_gyro, OREBA_FREQUENCY)
-            right_init_q = estimate_initial_quaternion(right_acc, right_gyro, OREBA_FREQUENCY)
-            # Remove gravity from acceleration vector
-            logging.info("Removing gravity")
-            left_acc_0 = remove_gravity(left_acc, left_gyro, left_init_q, OREBA_FREQUENCY, 16, args.vis)
-            right_acc_0 = remove_gravity(right_acc, right_gyro, right_init_q, OREBA_FREQUENCY, 16, args.vis)
-            # Standardize
-            left_acc_0 = standardize(left_acc_0)
-            left_gyro_0 = standardize(left_gyro)
-            right_acc_0 = standardize(right_acc_0)
-            right_gyro_0 = standardize(right_gyro)
+            # Preprocessing
+            left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
+                args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
+            right_acc_0, right_gyro_0 = preprocess(right_acc, right_gyro,
+                args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
@@ -244,15 +270,9 @@ def main(args=None):
                         subject_id, session))
                 # Read acc and gyro
                 timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
-                # Estimate initial quaternion
-                logging.info("Estimating initial quaternion")
-                init_q = estimate_initial_quaternion(acc, gyro, CLEMSON_FREQUENCY)
-                # Remove gravity from acceleration vector
-                logging.info("Removing gravity")
-                acc_0 = remove_gravity(acc, gyro, init_q, CLEMSON_FREQUENCY, 15, args.vis)
-                # Standardize
-                acc_0 = standardize(acc_0)
-                gyro_0 = standardize(gyro)
+                # Preprocessing
+                acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
+                    args.smo_window_size, args.preprocess, args.vis)
                 # Read annotations
                 annotations = reader.read_annotations(gesture_dir, bite_dir)
                 label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
@@ -307,15 +327,9 @@ def main(args=None):
             dt = factor / FIC_FREQUENCY
             timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
             timestamps = np.array(timestamps / calc_factor)
-            # Estimate initial quaternion
-            logging.info("Estimating initial quaternion")
-            init_q = estimate_initial_quaternion(acc, gyro, FIC_FREQUENCY)
-            # Remove gravity from acceleration vector
-            logging.info("Removing gravity")
-            acc_0 = remove_gravity(acc_res, gyro_res, init_q, FIC_FREQUENCY, 16, args.vis)
-            # Standardize
-            acc_0 = standardize(acc_0)
-            gyro_0 = standardize(gyro_res)
+            # Preprocessing
+            acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
+                args.smo_window_size, args.preprocess, args.vis)
             # Read annotations
             annotations = data['bite_gt'][i]
             label_1 = reader.get_labels(annotations, timestamps)
@@ -332,7 +346,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default='export', nargs='?', help='Directory for data export.')
-    parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?')
-    parser.add_argument('--reader', choices=('Oreba', 'Clemson', 'FIC'), default='Oreba', nargs='?')
+    parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
+    parser.add_argument('--database', choices=('Oreba', 'Clemson', 'FIC'), default='Oreba', nargs='?', help='Which database reader/writer to use')
+    parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
+    parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
+    parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
     args = parser.parse_args()
     main(args)
