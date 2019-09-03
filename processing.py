@@ -193,10 +193,33 @@ def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
 
     return acc, gyro
 
-def resample(x, target_freq):
+def resample(acc, gyro, target_rate, decimate, timestamps=None, original_rate=None, units='millis', total_time=None):
     """Resample data using target frequency"""
-    # TODO implement
-    return None
+    if decimate:
+        if original_rate % target_rate == 0:
+            acc = signal.decimate(acc, original_rate//target_rate)
+            gyro = signal.decimate(gyro, original_rate//target_rate)
+            timestamps = timestamps[::original_rate//target_rate].copy()
+        else:
+            raise RuntimeError('Cannot decimate for this target rate')
+    else:
+        # Number of samples after resampling
+        if units == 'millis':
+            factor = FACTOR_MILLIS
+            calc_factor = 1000000
+        else:
+            factor = FACTOR_NANOS
+            calc_factor = 1
+        num = int(total_time / (1 / target_rate * factor))
+        # Resample
+        acc = signal.resample(acc, num)
+        gyro = signal.resample(gyro, num)
+        # Derive evenly spaced timestamps
+        dt = factor / target_rate
+        timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
+        timestamps = np.array(timestamps / calc_factor)
+
+    return timestamps, acc, gyro
 
 def main(args=None):
     """Main"""
@@ -220,6 +243,13 @@ def main(args=None):
             logging.info("Reading raw data from Unisens")
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
+            # Resample
+            timestamps, left_acc, left_gyro = resample(left_acc, left_gyro,
+                args.sampling_rate, decimate=True, timestamps=timestamps,
+                original_rate=OREBA_FREQUENCY)
+            _, right_acc, right_gyro = resample(right_acc, right_gyro,
+                args.sampling_rate, decimate=True, timestamps=timestamps,
+                original_rate=OREBA_FREQUENCY)
             # Preprocessing
             left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
                 args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
@@ -305,28 +335,17 @@ def main(args=None):
             # Read acc and gyro
             acc = data['raw_signals'][i]['accelerometer']
             gyro = data['raw_signals'][i]['gyroscope']
-            # Determine start_time as first time available for both sensors
+            # In this dataset, raw acc and gyro are not temporally aligned.
+            # Align acc and gyro
             start_time = np.max([acc[0,0], gyro[0,0]])
             end_time = np.min([acc[acc.shape[0]-1,0], gyro[gyro.shape[0]-1,0]])
             total_time = end_time - start_time
-            # Number of samples after resampling
-            if metadata['timestamps_raw_units'] == 'millis':
-                factor = FACTOR_MILLIS
-                calc_factor = 1000000
-            else:
-                factor = FACTOR_NANOS
-                calc_factor = 1
-            num = int(total_time / (1 / FIC_FREQUENCY * factor))
-            # Trim and resample acc
             acc = acc[np.where(acc==start_time)[0][0]:np.where(acc==end_time)[0][0],1:4]
-            acc_res = signal.resample(acc, num)
-            # Trim and resample acc
             gyro = gyro[np.where(gyro==start_time)[0][0]:np.where(gyro==end_time)[0][0],1:4]
-            gyro_res = signal.resample(gyro, num)
-            # Derive evenly spaced timestamps
-            dt = factor / FIC_FREQUENCY
-            timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
-            timestamps = np.array(timestamps / calc_factor)
+            # Resample
+            timestamps, acc, gyro = resample(acc, gyro, args.sampling_rate,
+                decimate=False, units=metadata['timestamps_raw_units'],
+                total_time=total_time)
             # Preprocessing
             acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
                 args.smo_window_size, args.preprocess, args.vis)
@@ -339,7 +358,7 @@ def main(args=None):
                 gyro_res, gyro_0, label_1)
 
     else:
-        raise RunimeError('No valid reader selected')
+        raise RuntimeError('No valid reader selected')
     logging.info("Done")
 
 if __name__ == '__main__':
