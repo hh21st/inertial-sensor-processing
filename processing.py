@@ -229,19 +229,24 @@ def resample(acc, gyro, target_rate, units, total_time):
 
 def main(args=None):
     """Main"""
-    if args.database == 'Oreba':
+    if args.database == 'OREBA':
         # For OREBA data
         # Read subjects
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = OrebaReader()
         for subject_id in subject_ids:
             logging.info("Working on subject {}".format(subject_id))
+            if args.exp_mode == 'dev':
+                exp_file = "OREBA_" + subject_id + "_" + \
+                    str(args.sampling_rate) + "_" + args.preprocess + ".csv"
+            else:
+                exp_file = subject_id + "_inert.csv"
             if args.exp_dir == args.src_dir:
-                exp_path = os.path.join(args.exp_dir, subject_id, subject_id + "_inert.csv")
+                exp_path = os.path.join(args.exp_dir, subject_id, exp_file)
             else:
                 if not os.path.exists(args.exp_dir):
                     os.makedirs(args.exp_dir)
-                exp_path = os.path.join(args.exp_dir, subject_id + ".csv")
+                exp_path = os.path.join(args.exp_dir, exp_file)
             if os.path.isfile(exp_path):
                 logging.info("Dataset file already exists. Skipping {0}.".format(subject_id))
                 continue
@@ -265,7 +270,7 @@ def main(args=None):
             dominant_hand = reader.read_dominant(args.src_dir, subject_id)
             # Write csv
             writer = OrebaWriter(exp_path)
-            if args.write_mode == 'dev':
+            if args.exp_mode == 'dev':
                 writer.write_dev(subject_id, timestamps, left_acc_0,
                     left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
                     label_1, label_2, label_3, label_4)
@@ -289,7 +294,12 @@ def main(args=None):
                 # Make sure export dir exists
                 if not os.path.exists(args.exp_dir):
                     os.makedirs(args.exp_dir)
-                exp_path = os.path.join(args.exp_dir, subject_id + "_" + session + ".csv")
+                if args.exp_mode == 'dev':
+                    exp_file = "Clemson_" + subject_id + "_" + session + \
+                        "_15_" + args.preprocess + ".csv"
+                else:
+                    exp_file = subject_id + "_" + session + ".csv"
+                exp_path = os.path.join(args.exp_dir, exp_file)
                 # Skip if export file already exists
                 if os.path.isfile(exp_path):
                     logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session))
@@ -317,7 +327,7 @@ def main(args=None):
                 label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
                 # Write csv
                 writer = ClemsonWriter(exp_path)
-                if args.write_mode == 'dev':
+                if args.exp_mode == 'dev':
                     writer.write_dev(subject_id, session, timestamps, acc_0,
                         gyro_0, label_1, label_2, label_3, label_4, label_5)
                 else:
@@ -341,7 +351,12 @@ def main(args=None):
             # Make sure export dir exists
             if not os.path.exists(args.exp_dir):
                 os.makedirs(args.exp_dir)
-            exp_path = os.path.join(args.exp_dir, str(subject_id) + "_" + str(session_id) + ".csv")
+            if args.exp_mode == 'dev':
+                exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
+                    "_" + str(args.sampling_rate) + "_" + args.preprocess + ".csv"
+            else:
+                exp_file = str(subject_id) + "_" + str(session_id) + ".csv"
+            exp_path = os.path.join(args.exp_dir, exp_file)
             # Skip if export file already exists
             if os.path.isfile(exp_path):
                 logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session_id))
@@ -372,7 +387,7 @@ def main(args=None):
             label_1 = reader.get_labels(annotations, timestamps)
             # Write csv
             writer = FICWriter(exp_path)
-            if args.write_mode == 'dev':
+            if args.exp_mode == 'dev':
                 writer.write_dev(subject_id, session_id, timestamps, acc_0,
                     gyro_0, label_1, metadata['timestamps_raw_units'])
             else:
@@ -388,10 +403,10 @@ if __name__ == '__main__':
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default='export', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
-    parser.add_argument('--database', choices=('Oreba', 'Clemson', 'FIC'), default='Oreba', nargs='?', help='Which database reader/writer to use')
+    parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
-    parser.add_argument('--write_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
+    parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     args = parser.parse_args()
     main(args)
