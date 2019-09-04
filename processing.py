@@ -409,5 +409,6 @@ if __name__ == '__main__':
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
+    parser.add_argument('--uniform_data', type=str, choices=('True', 'False'), default='False', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     args = parser.parse_args()
     main(args)
