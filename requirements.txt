@@ -2,3 +2,4 @@ numpy
 pygame
 numpy-quaternion
 JPype1
+xlrd
