@@ -19,7 +19,7 @@ class OrebaWriter:
                 "left_acc_x", "left_acc_y", "left_acc_z",
                 "left_gyro_x", "left_gyro_y", "left_gyro_z",
                 "right_acc_x", "right_acc_y", "right_acc_z",
-                "right_gyro_x", "right_gyro_y", "right_gyro_x",
+                "right_gyro_x", "right_gyro_y", "right_gyro_z",
                 "dominant_hand", "label_1", "label_2", "label_3", "label_4"])
             for i in range(0, len(timestamps)):
                 writer.writerow([subject_ids[i], frame_ids[i], timestamps[i],
@@ -48,7 +48,7 @@ class OrebaWriter:
                 "left_gyro_x_0", "left_gyro_y_0", "left_gyro_z_0",
                 "right_acc_x", "right_acc_y", "right_acc_z",
                 "right_acc_x_0", "right_acc_y_0", "right_acc_z_0",
-                "right_gyro_x", "right_gyro_y", "right_gyro_x",
+                "right_gyro_x", "right_gyro_y", "right_gyro_z",
                 "right_gyro_x_0", "right_gyro_y_0", "right_gyro_z_0",
                 "dominant_hand", "label_1", "label_2", "label_3", "label_4"])
             for i in range(0, len(timestamps)):
