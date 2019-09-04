@@ -288,6 +288,7 @@ def main(args=None):
         reader = ClemsonReader()
         for subject_id in subject_ids:
             subject_dir = os.path.join(data_dir, subject_id)
+            hand = reader.read_hand(args.src_dir, subject_id)
             sessions = [x for x in next(os.walk(subject_dir))[1]]
             for session in sessions:
                 logging.info("Working on subject {}, session {}".format(subject_id, session))
@@ -329,10 +330,10 @@ def main(args=None):
                 writer = ClemsonWriter(exp_path)
                 if args.exp_mode == 'dev':
                     writer.write_dev(subject_id, session, timestamps, acc_0,
-                        gyro_0, label_1, label_2, label_3, label_4, label_5)
+                        gyro_0, hand, label_1, label_2, label_3, label_4, label_5)
                 else:
                     writer.write_pub(subject_id, session, timestamps, acc,
-                        acc_0, gyro, gyro_0, label_1, label_2, label_3,
+                        acc_0, gyro, gyro_0, hand, label_1, label_2, label_3,
                         label_4, label_5)
 
     elif args.database == "FIC":

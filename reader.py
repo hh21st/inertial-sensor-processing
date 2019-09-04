@@ -9,6 +9,7 @@ import xml.etree.cElementTree as etree
 import glob
 import h5py
 import pickle
+import xlrd
 
 OREBA_FREQUENCY = 64
 OREBA_DEFAULT_LABEL = "Idle"
@@ -88,7 +89,7 @@ class OrebaReader:
         path = os.path.join(src_dir, subject_id, "data_sensor", "unisens.xml")
         for child in etree.parse(path).getroot():
             if 'left' in child.attrib['id']:
-                dom = 'Right' if 'non' in child.attrib['comment'] else 'Left'
+                dom = 'right' if 'non' in child.attrib['comment'] else 'left'
                 return dom
 
     def get_labels(self, annotations, timestamps):
@@ -169,6 +170,17 @@ class ClemsonReader:
                 label_4.append("NA")
                 label_5.append("NA")
         return [start_time, end_time, label_1, label_2, label_3, label_4, label_5]
+
+    def read_hand(self, src_dir, subject_id):
+        """Read handedness, which is the hand sensor was placed on"""
+        file_path = os.path.join(src_dir, "demographics.xlsx")
+        workbook = xlrd.open_workbook(file_path)
+        sheet = workbook.sheet_by_index(0)
+        for rowx in range(sheet.nrows):
+            cols = sheet.row_values(rowx)
+            if cols[0].lower() == subject_id:
+                return cols[4].lower()
+        return "NA"
 
     def get_labels(self, annotations, timestamps):
         """Infer labels from annotations and timestamps"""
