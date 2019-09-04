@@ -227,6 +227,12 @@ def resample(acc, gyro, target_rate, units, total_time):
 
     return timestamps, acc, gyro
 
+def flip(acc, gyro):
+    """Flip left to right hand or right hand to left hand"""
+    acc = np.multiply(acc, [1, -1, 1])
+    gyro = np.multiply(gyro, [-1, 1, -1])
+    return acc, gyro
+
 def main(args=None):
     """Main"""
     if args.database == 'OREBA':
@@ -254,6 +260,11 @@ def main(args=None):
             logging.info("Reading raw data from Unisens")
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
+            # Make hands uniform by flipping left to right if needed
+            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
+            if args.uniform_data == 'True' and dominant_hand == 'left':
+                right_acc, right_gyro = flip(left_acc, left_gyro)
+                left_acc, left_gyro = flip(right_acc, right_gyro)
             # Resample
             timestamps, left_acc, left_gyro = decimate(left_acc, left_gyro,
                 timestamps, args.sampling_rate, OREBA_FREQUENCY)
@@ -267,17 +278,17 @@ def main(args=None):
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
-            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
             # Write csv
             writer = OrebaWriter(exp_path)
             if args.exp_mode == 'dev':
                 writer.write_dev(subject_id, timestamps, left_acc_0,
                     left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
-                    label_1, label_2, label_3, label_4)
+                    label_1, label_2, label_3, label_4, args.uniform_data)
             else:
                 writer.write_pub(subject_id, timestamps, left_acc, left_acc_0,
                     left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
-                    right_gyro_0, dominant_hand, label_1, label_2, label_3, label_4)
+                    right_gyro_0, dominant_hand, label_1, label_2, label_3,
+                    label_4)
         reader.done()
 
     elif args.database == 'Clemson':
@@ -320,6 +331,9 @@ def main(args=None):
                         subject_id, session))
                 # Read acc and gyro
                 timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
+                # Make hands uniform by flipping left to right if needed
+                if args.uniform_data == "True" and hand == 'left':
+                    acc, gyro = flip(acc, gyro)
                 # Preprocessing
                 acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
                     args.smo_window_size, args.preprocess, args.vis)
@@ -330,7 +344,8 @@ def main(args=None):
                 writer = ClemsonWriter(exp_path)
                 if args.exp_mode == 'dev':
                     writer.write_dev(subject_id, session, timestamps, acc_0,
-                        gyro_0, hand, label_1, label_2, label_3, label_4, label_5)
+                        gyro_0, hand, label_1, label_2, label_3, label_4,
+                        label_5)
                 else:
                     writer.write_pub(subject_id, session, timestamps, acc,
                         acc_0, gyro, gyro_0, hand, label_1, label_2, label_3,
@@ -365,6 +380,7 @@ def main(args=None):
             # Read acc and gyro
             acc = data['raw_signals'][i]['accelerometer']
             gyro = data['raw_signals'][i]['gyroscope']
+            # TODO Once we get information, transform/flip data here.
             # In this dataset, raw acc and gyro are not temporally aligned.
             # Align acc and gyro
             start_time = np.max([acc[0,0], gyro[0,0]])
