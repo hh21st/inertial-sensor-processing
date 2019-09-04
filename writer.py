@@ -7,14 +7,14 @@ class OrebaWriter:
 
     def write_dev(self, subject_id, timestamps, left_acc, left_gyro,
         right_acc, right_gyro, dominant_hand, label_1, label_2, label_3,
-        label_4, uniform_data):
+        label_4, exp_uniform):
         frame_ids = range(0, len(timestamps))
         def _format_time(t):
             return (datetime.min + timedelta(microseconds=t)).time().strftime('%H:%M:%S.%f')
         timestamps = [_format_time(t) for t in timestamps]
         with open(self.path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile, delimiter=',')
-            if uniform_data == 'True':
+            if exp_uniform == 'True':
                 writer.writerow(["id", "frame_id", "timestamp",
                     "dom_acc_x", "dom_acc_y", "dom_acc_z",
                     "dom_gyro_x", "dom_gyro_y", "dom_gyro_z",

@@ -7,6 +7,7 @@ from writer import OrebaWriter, ClemsonWriter, FICWriter
 import csv
 import argparse
 import os
+import copy
 import logging
 from scipy import signal
 from math import radians, degrees
@@ -262,9 +263,11 @@ def main(args=None):
                 reader.read_inert(args.src_dir, subject_id)
             # Make hands uniform by flipping left to right if needed
             dominant_hand = reader.read_dominant(args.src_dir, subject_id)
-            if args.uniform_data == 'True' and dominant_hand == 'left':
+            if args.exp_uniform == 'True' and dominant_hand == 'left':
+                right_acc_temp = copy.deepcopy(right_acc)
+                right_gyro_temp = copy.deepcopy(right_gyro)
                 right_acc, right_gyro = flip(left_acc, left_gyro)
-                left_acc, left_gyro = flip(right_acc, right_gyro)
+                left_acc, left_gyro = flip(right_acc_temp, right_gyro_temp)
             # Resample
             timestamps, left_acc, left_gyro = decimate(left_acc, left_gyro,
                 timestamps, args.sampling_rate, OREBA_FREQUENCY)
@@ -283,7 +286,7 @@ def main(args=None):
             if args.exp_mode == 'dev':
                 writer.write_dev(subject_id, timestamps, left_acc_0,
                     left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
-                    label_1, label_2, label_3, label_4, args.uniform_data)
+                    label_1, label_2, label_3, label_4, args.exp_uniform)
             else:
                 writer.write_pub(subject_id, timestamps, left_acc, left_acc_0,
                     left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
@@ -332,7 +335,7 @@ def main(args=None):
                 # Read acc and gyro
                 timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
                 # Make hands uniform by flipping left to right if needed
-                if args.uniform_data == "True" and hand == 'left':
+                if args.exp_uniform == "True" and hand == 'left':
                     acc, gyro = flip(acc, gyro)
                 # Preprocessing
                 acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
@@ -425,6 +428,6 @@ if __name__ == '__main__':
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
-    parser.add_argument('--uniform_data', type=str, choices=('True', 'False'), default='False', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
+    parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     args = parser.parse_args()
     main(args)
