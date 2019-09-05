@@ -10,7 +10,7 @@ def main(args=None):
     """check if the hand mentioned the most in label3 (hand) matches with the participant's dominant hand"""
     subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
     reader = OrebaReader()
-    exp_file = open("verify_dom_hand1.txt","w")
+    exp_file = open(args.result_file_name,"w")
     for subject_id in subject_ids:
         if subject_id == "1074":
             continue
@@ -78,19 +78,20 @@ def main(args=None):
         result =   "<  OK!  >        " if dominant_hand == dom_count else "< WRONG >        "
         result_d = "        <Dr==DOM>" if dominant_hand == dom_count_d else "        <DR!!DOM>"
 
-        report = "subject:{0}: {7}, dom_hand:{1}, lablel_3:{2}, right:{3}, left:{4}, both:{5}, idle:{6}".\
+        report = "subject:{0}: {7}, dom_hand:{1}, lablel_3:{2}, right:{3}, left:{4}, both:{5}, idle:{6}\n".\
             format(subject_id,dominant_hand,dom_count,label_3_right,label_3_left,label_3_both,label_3_idle, result)
         print(report)
-        exp_file.write(report)
-        report_d = "subject:{0}: {7}, dom_hand:{1}, lablel_3:{2}, right:{3}, left:{4}, both:{5}, idle:{6}".\
+        exp_file.writelines(report)
+        report_d = "subject:{0}: {7}, dom_hand:{1}, lablel_3:{2}, right:{3}, left:{4}, both:{5}, idle:{6}\n".\
             format(subject_id,dominant_hand,dom_count_d,label_3_right_d,label_3_left_d,label_3_both_d,label_3_idle_d, result_d)
         print(report_d)        
-        exp_file.write(report_d)
+        exp_file.writelines(report_d)
     exp_file.close()
     reader.done()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
+    parser.add_argument('--result_file_name', type=str, default='verify_dom_hand', nargs='?', help='The resut file name.')
     args = parser.parse_args()
     main(args)
