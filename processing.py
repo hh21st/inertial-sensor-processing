@@ -245,7 +245,7 @@ def main(args=None):
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
                 exp_file = "OREBA_" + subject_id + "_" + \
-                    str(args.sampling_rate) + "_" + args.preprocess + ".csv"
+                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + ".csv"
             else:
                 exp_file = subject_id + "_inert.csv"
             if args.exp_dir == args.src_dir:
@@ -311,7 +311,7 @@ def main(args=None):
                     os.makedirs(args.exp_dir)
                 if args.exp_mode == 'dev':
                     exp_file = "Clemson_" + subject_id + "_" + session + \
-                        "_15_" + args.preprocess + ".csv"
+                        "_15_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
                 else:
                     exp_file = subject_id + "_" + session + ".csv"
                 exp_path = os.path.join(args.exp_dir, exp_file)
@@ -372,7 +372,7 @@ def main(args=None):
                 os.makedirs(args.exp_dir)
             if args.exp_mode == 'dev':
                 exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
-                    "_" + str(args.sampling_rate) + "_" + args.preprocess + ".csv"
+                    "_" + str(args.sampling_rate) + "_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
             else:
                 exp_file = str(subject_id) + "_" + str(session_id) + ".csv"
             exp_path = os.path.join(args.exp_dir, exp_file)
