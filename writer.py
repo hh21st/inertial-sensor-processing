@@ -45,6 +45,13 @@ class OrebaWriter:
                         dominant_hand, label_1[i], label_2[i], label_3[i],
                         label_4[i]])
 
+    def write_summary(self, ids, n_gestures, t_gestures, t_total):
+        with open(self.path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow(["id", "n_gestures", "t_gestures", "t_total"])
+            for i in range(0, len(ids)):
+                writer.writerow([ids[i], n_gestures[i], t_gestures[i], t_total[i]])
+
     # TODO Decide how to present data for publication (hand flipping etc.)
     def write_pub(self, subject_id, timestamps, left_acc, left_acc_0, left_gyro,
         left_gyro_0, right_acc, right_acc_0, right_gyro, right_gyro_0,
@@ -120,6 +127,13 @@ class ClemsonWriter:
                     gyro[i][2], hand, label_1[i], label_2[i], label_3[i],
                     label_4[i], label_5[i]])
 
+    def write_summary(self, ids, n_gestures, t_gestures, t_total):
+        with open(self.path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow(["id", "n_gestures", "t_gestures", "t_total"])
+            for i in range(0, len(ids)):
+                writer.writerow([ids[i], n_gestures[i], t_gestures[i], t_total[i]])
+
 class FICWriter:
     def __init__(self, path):
         self.path = path
@@ -161,3 +175,10 @@ class FICWriter:
                 writer.writerow([id, frame_ids[i], timestamps[i],
                     acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
                     gyro[i][2], label_1[i]])
+
+    def write_summary(self, ids, n_gestures, t_gestures, t_total):
+        with open(self.path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow(["id", "n_gestures", "t_gestures", "t_total"])
+            for i in range(0, len(ids)):
+                writer.writerow([ids[i], n_gestures[i], t_gestures[i], t_total[i]])
