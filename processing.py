@@ -332,6 +332,7 @@ def main(args=None):
                 if not os.path.isfile(bite_dir):
                     logging.warn("No bite annotations found. Skipping {}_{}.".format(
                         subject_id, session))
+                    continue
                 # Read acc and gyro
                 timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
                 # Make hands uniform by flipping left to right if needed
