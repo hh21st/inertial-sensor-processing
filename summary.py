@@ -5,6 +5,9 @@ import logging
 from reader import OrebaReader, ClemsonReader, FICReader
 from writer import OrebaWriter, ClemsonWriter, FICWriter
 
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S', level=logging.INFO)
+
 def main(args=None):
     """Main"""
     if args.database == "OREBA":
@@ -12,6 +15,9 @@ def main(args=None):
         reader = OrebaReader()
         n_gestures, t_gestures, t_total = [], [], []
         for subject_id in subject_ids:
+            if subject_id == '1074':
+                continue
+            logging.info("Working on subject {}".format(subject_id))
             timestamps, _, _, _, _ = reader.read_inert(args.src_dir, subject_id)
             annotations = np.array(reader.read_annotations(args.src_dir, subject_id))
             n_gestures.append(annotations.shape[1])
