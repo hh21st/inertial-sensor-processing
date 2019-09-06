@@ -90,7 +90,7 @@ def main(args=None):
     reader.done()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process inertial sensor data')
+    parser = argparse.ArgumentParser(description='check if the hand mentioned the most in label3 (hand) matches with the participants dominant hand')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--result_file_name', type=str, default='verify_dom_hand', nargs='?', help='The resut file name.')
     args = parser.parse_args()
