@@ -242,6 +242,9 @@ def main(args=None):
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = OrebaReader()
         for subject_id in subject_ids:
+            # skip over faulty data file (1074)
+            if subject_id == "1074":
+                continue
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
                 exp_file = "OREBA_" + subject_id + "_" + \
