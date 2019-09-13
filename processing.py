@@ -1,6 +1,7 @@
 import numpy as np
 import quaternion
 from visualization import PygameViewer
+import tensorflow as tf
 from fusion import MadgwickFusion
 from reader import OrebaReader, ClemsonReader, FICReader
 from writer import OrebaWriter, ClemsonWriter, FICWriter
@@ -12,6 +13,8 @@ import logging
 from scipy import signal
 from math import radians, degrees
 import itertools
+from data_organiser import DataOrganiser
+from utils import *
 
 OREBA_FREQUENCY = 64
 CLEMSON_FREQUENCY = 15
@@ -234,8 +237,7 @@ def flip(acc, gyro):
     gyro = np.multiply(gyro, [-1, 1, -1])
     return acc, gyro
 
-def main(args=None):
-    """Main"""
+def process(args=None):
     if args.database == 'OREBA':
         # For OREBA data
         # Read subjects
@@ -418,14 +420,26 @@ def main(args=None):
                 writer.write_pub(subject_id, session_id, timestamps, acc,
                     acc_0, gyro, gyro_0, label_1, metadata['timestamps_raw_units'])
 
-    else:
-        raise RuntimeError('No valid reader selected')
+    else: raise RuntimeError('No valid reader selected')
+
+def main(args=None):
+    """Main"""
+    process(args)
+
+    params = tf.contrib.training.HParams(
+        src_dir = args.exp_dir,
+        des_dir = args.des_dir,
+        make_subfolders_val = get_bool(args.make_subfolders_val),
+        make_subfolders_test = get_bool(args.make_subfolders_test))
+
+    DataOrganiser.organise(params)
+
     logging.info("Done")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
-    parser.add_argument('--exp_dir', type=str, default='export', nargs='?', help='Directory for data export.')
+    parser.add_argument('--exp_dir', type=str, default='Export', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
@@ -433,5 +447,8 @@ if __name__ == '__main__':
     parser.add_argument('--smo_window_size', type=float, default=1, nargs='?', help='Size of the smoothing window [sec].')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
+    parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
+    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub forlder per each file in validation set if true.')
+    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub forlder per each file in test set if true.')
     args = parser.parse_args()
     main(args)
