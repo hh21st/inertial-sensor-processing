@@ -170,6 +170,10 @@ def standardize(x):
     return list(np_x)
 
 def smoothe(x, size=15, order=3):
+    if(size < 3):
+        return x;
+    if size <= order:
+        order = size - 1
     return signal.savgol_filter(x, size, order, axis=0)
 
 def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
@@ -186,10 +190,10 @@ def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
     if mode == 'grm':
         return acc, gyro
     # 2. Smoothing
-    def _down_to_odd_integer(f):
+    def _up_to_odd_integer(f):
         return int(np.ceil(f) // 2 * 2 + 1)
-    acc = smoothe(acc, _down_to_odd_integer(smo_window_size * sampling_rate))
-    gyro = smoothe(gyro, _down_to_odd_integer(smo_window_size * sampling_rate))
+    acc = smoothe(acc, _up_to_odd_integer(smo_window_size * sampling_rate))
+    gyro = smoothe(gyro, _up_to_odd_integer(smo_window_size * sampling_rate))
     if mode == 'smo':
         return acc, gyro
     # 3. Standardize
