@@ -86,11 +86,13 @@ class OrebaReader:
         return [start_time, end_time, label_1, label_2, label_3, label_4]
 
     def read_dominant(self, src_dir, subject_id):
-        path = os.path.join(src_dir, subject_id, "data_sensor", "unisens.xml")
-        for child in etree.parse(path).getroot():
-            if 'left' in child.attrib['id']:
-                dom = 'right' if 'non' in child.attrib['comment'] else 'left'
-                return dom
+        file_full_name = os.path.join(src_dir, 'dom_hand_info.csv')
+        dom_hand_info = csv.reader(open(file_full_name, 'r'), delimiter=',')
+        next(dom_hand_info, None)
+        for row in dom_hand_info:
+            if subject_id == row[0]:
+                return row[1].strip().lower()
+        return 'not found'
 
     def get_labels(self, annotations, timestamps):
         """Infer labels from annotations and timestamps"""
