@@ -1,13 +1,77 @@
 import pygame
+import quaternion
+import numpy as np
 from operator import itemgetter
+
+class Node:
+    """A node is an edge of the cuboid"""
+    def __init__(self, coords, color):
+        self.x = coords[0]
+        self.y = coords[1]
+        self.z = coords[2]
+        self.color = color
+
+class Face:
+    """A face of the cuboid is defined using the indices of four nodes"""
+    def __init__(self, nodeIdxs, color):
+        self.nodeIdxs = nodeIdxs
+        self.color = color
+
+class Cuboid:
+    """The cuboid"""
+    def __init__(self, quaternion):
+        self.nodes = []
+        self.faces = []
+        self.q = quaternion
+
+    def set_nodes(self, nodes):
+        self.nodes = nodes
+
+    def set_faces(self, faces):
+        self.faces = faces
+
+    def set_quaternion(self, q):
+        self.q = q
+
+    def rotate_quaternion(self, w, dt):
+        self.q = dt/2 * self.q * np.quaternion(0, w[0], w[1], w[2]) + self.q
+
+    def rotate_point(self, point):
+        return quaternion.rotate_vectors(self.q, point)
+
+    def convert_to_computer_frame(self, point):
+        computerFrameChangeMatrix = np.array([[-1, 0, 0], [0, 0, -1], [0, -1, 0]])
+        return np.matmul(computerFrameChangeMatrix, point)
+
+    def get_euler_attitude(self):
+        def _rad2deg(rad):
+            return rad / np.pi * 180
+        m = quaternion.as_rotation_matrix(self.q)
+        test = -m[2, 0]
+        if test > 0.99999:
+            yaw = 0
+            pitch = np.pi / 2
+            roll = np.arctan2(m[0, 1], m[0, 2])
+        elif test < -0.99999:
+            yaw = 0
+            pitch = -np.pi / 2
+            roll = np.arctan2(-m[0, 1], -m[0, 2])
+        else:
+            yaw = np.arctan2(m[1, 0], m[0, 0])
+            pitch = np.arcsin(-m[2, 0])
+            roll = np.arctan2(m[2, 1], m[2, 2])
+        yaw = _rad2deg(yaw)
+        pitch = _rad2deg(pitch)
+        roll = _rad2deg(roll)
+        return yaw, pitch, roll
 
 class PygameViewer:
     """Displays 3D objects on a Pygame screen"""
 
-    def __init__(self, width, height, cuboid, loopRate):
+    def __init__(self, width, height, quaternion, loopRate):
         self.width = width
         self.height = height
-        self.cuboid = cuboid
+        self.cuboid = self.initialize_cuboid(quaternion)
         self.loopRate = loopRate
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption('Sensor fusion for inertial sensors')
@@ -15,6 +79,35 @@ class PygameViewer:
         self.clock = pygame.time.Clock()
         pygame.font.init()
         self.font = pygame.font.SysFont('Comic Sans MS', 20)
+
+    def initialize_cuboid(self, quaternion):
+        """Initialize cuboid with nodes and faces"""
+        # The cuboid with initial quaternion
+        cuboid = Cuboid(quaternion)
+        # Define nodes
+        nodes = []
+        nodes.append(Node([-1.5, -1, -0.1], [255, 255, 255]))
+        nodes.append(Node([-1.5, -1, 0.1], [255, 255, 255]))
+        nodes.append(Node([-1.5, 1, -0.1], [255, 255, 255]))
+        nodes.append(Node([-1.5, 1, 0.1], [255, 255, 255]))
+        nodes.append(Node([1.5, -1, -0.1], [255, 255, 255]))
+        nodes.append(Node([1.5, -1, 0.1], [255, 255, 255]))
+        nodes.append(Node([1.5, 1, -0.1], [255, 255, 255]))
+        nodes.append(Node([1.5, 1, 0.1], [255, 255, 255]))
+        cuboid.set_nodes(nodes)
+        # Define faces
+        faces = []
+        faces.append(Face([0, 2, 6, 4], [255, 0, 255]))
+        faces.append(Face([0, 1, 3, 2], [255, 0, 0]))
+        faces.append(Face([1, 3, 7, 5], [0, 255, 0]))
+        faces.append(Face([4, 5, 7, 6], [0, 0, 255]))
+        faces.append(Face([2, 3, 7, 6], [0, 255, 255]))
+        faces.append(Face([0, 1, 5, 4], [255, 255, 0]))
+        cuboid.set_faces(faces)
+        return cuboid
+
+    def set_quaternion(self, q):
+        self.cuboid.set_quaternion(q)
 
     def update(self):
         """Update the screen"""
