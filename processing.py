@@ -1,7 +1,6 @@
 import numpy as np
 import quaternion
 from visualization import PygameViewer
-import tensorflow as tf
 from fusion import MadgwickFusion
 from reader import OrebaReader, ClemsonReader, FICReader
 from writer import OrebaWriter, ClemsonWriter, FICWriter
@@ -149,7 +148,7 @@ def flip(acc, gyro):
     gyro = np.multiply(gyro, [-1, 1, -1])
     return acc, gyro
 
-def process(args=None):
+def main(args=None):
     if args.database == 'OREBA':
         # For OREBA data
         # Read subjects
@@ -334,17 +333,10 @@ def process(args=None):
 
     else: raise RuntimeError('No valid reader selected')
 
-def main(args=None):
-    """Main"""
-    process(args)
-
-    params = tf.contrib.training.HParams(
-        src_dir = args.exp_dir,
-        des_dir = args.des_dir,
-        make_subfolders_val = get_bool(args.make_subfolders_val),
-        make_subfolders_test = get_bool(args.make_subfolders_test))
-
-    DataOrganiser.organise(params)
+    if get_bool(args.organise_data):
+        DataOrganiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
+            make_subfolders_val = get_bool(args.make_subfolders_val),
+            make_subfolders_test = get_bool(args.make_subfolders_test))
 
     logging.info("Done")
 
@@ -359,8 +351,9 @@ if __name__ == '__main__':
     parser.add_argument('--smo_window_size', type=float, default=0.125, nargs='?', help='Size of the smoothing window [sec].')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
+    parser.add_argument('--organise_data', type=str, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
-    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub forlder per each file in validation set if true.')
-    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub forlder per each file in test set if true.')
+    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
+    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
     args = parser.parse_args()
     main(args)

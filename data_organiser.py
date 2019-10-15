@@ -2,7 +2,6 @@ import argparse
 import os
 import shutil
 import logging
-import tensorflow as tf
 from utils import *
 from oreba_utils import *
 
@@ -10,7 +9,7 @@ logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
 class DataOrganiser:
-    def organise(params):
+    def organise(src_dir, des_dir, make_subfolders_val, make_subfolders_test):
         """devides data into training, validation and test sets"""
 
         def copy_file_and_log(full_file_name, copy_to_dir):
@@ -24,26 +23,26 @@ class DataOrganiser:
         val_list = ['1004','1010','1015','1020','1025','1030','1036','1043','1048','1054','1060','1068','1075','1081','1086','1091','1096','1101','1107','1112']
         test_list = ['1005','1011','1016','1021','1026','1031','1037','1044','1050','1055','1061','1071','1076','1082','1087','1092','1097','1102','1108','1113']
 
-        train_dir = os.path.join(params.des_dir,'train') 
-        val_dir = os.path.join(params.des_dir,'eval') 
-        val_sub_dir = os.path.join(params.des_dir,'eval_sub') 
-        test_dir = os.path.join(params.des_dir,'test')  
-        test_sub_dir = os.path.join(params.des_dir,'test_sub')  
-    
-        src_files = os.listdir(params.src_dir)
+        train_dir = os.path.join(des_dir,'train')
+        val_dir = os.path.join(des_dir,'eval')
+        val_sub_dir = os.path.join(des_dir,'eval_sub')
+        test_dir = os.path.join(des_dir,'test')
+        test_sub_dir = os.path.join(des_dir,'test_sub')
+
+        src_files = os.listdir(src_dir)
         for file_name in src_files:
             subject_id = get_subject_id(file_name)
-            full_file_name = os.path.join(params.src_dir, file_name)
+            full_file_name = os.path.join(src_dir, file_name)
             logging.info("processing subject {0}, copying file {1}".format(subject_id, full_file_name))
             if subject_id in train_list:
                 copy_to_dir = train_dir
                 copy_to_sub_dir = ''
             elif subject_id in val_list:
                 copy_to_dir = val_dir
-                copy_to_sub_dir = os.path.join(val_sub_dir, subject_id) if params.make_subfolders_val else ''
+                copy_to_sub_dir = os.path.join(val_sub_dir, subject_id) if make_subfolders_val else ''
             elif subject_id in test_list:
                 copy_to_dir = test_dir
-                copy_to_sub_dir = os.path.join(test_sub_dir, subject_id) if params.make_subfolders_test else ''
+                copy_to_sub_dir = os.path.join(test_sub_dir, subject_id) if make_subfolders_test else ''
             else:
                 raise RuntimeError("subject {0} is not in any of the lists")
 
@@ -51,15 +50,10 @@ class DataOrganiser:
             if copy_to_sub_dir != '':
                 copy_file_and_log(full_file_name, copy_to_sub_dir)
 
-
 def main(args=None):
-    params = tf.contrib.training.HParams(
-        src_dir = args.src_dir,
-        des_dir = args.des_dir,
+    DataOrganiser.organise(src_dir=args.src_dir, des_dir=args.des_dir,
         make_subfolders_val = get_bool(args.make_subfolders_val),
         make_subfolders_test = get_bool(args.make_subfolders_test))
-
-    DataOrganiser.organise(params)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='devides data into training, validation and test sets')
