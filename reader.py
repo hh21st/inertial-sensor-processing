@@ -85,8 +85,8 @@ class OrebaReader:
                 label_4.append(row[7])
         return [start_time, end_time, label_1, label_2, label_3, label_4]
 
-    def read_dominant(self, src_dir, subject_id):
-        file_full_name = os.path.join(src_dir, 'dom_hand_info.csv')
+    def read_dominant(self, src_dir, subject_id, dom_hand_info_file_name):
+        file_full_name = os.path.join(src_dir, dom_hand_info_file_name)
         dom_hand_info = csv.reader(open(file_full_name, 'r'), delimiter=',')
         next(dom_hand_info, None)
         for row in dom_hand_info:

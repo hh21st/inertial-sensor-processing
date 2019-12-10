@@ -17,18 +17,27 @@ def main(args=None):
             raise RuntimeError('list {1} is not emptry yet: {0}'.format(list, list_name))
 
     all_list = ['1001','1002','1003','1004','1005','1006','1007','1008','1010','1011','1012','1013','1014','1015','1016','1017','1018','1019','1020','1021','1022','1023','1024','1025','1026','1027','1028','1029','1030','1031','1032','1033','1035','1036','1037','1039','1040','1041','1043','1044','1045','1046','1047','1048','1050','1051','1052','1053','1054','1055','1056','1057','1059','1060','1061','1063','1064','1067','1068','1071','1072','1073','1074','1075','1076','1077','1079','1080','1081','1082','1083','1084','1085','1086','1087','1088','1089','1090','1091','1092','1093','1094','1095','1096','1097','1098','1099','1100','1101','1102','1103','1104','1105','1107','1108','1109','1110','1111','1112','1113','1115','1116']
+    # self-reported right-handed participants
     right_list = ['1001','1003','1004','1005','1006','1007','1011','1012','1013','1014','1015','1016','1017','1018','1019','1020','1022','1023','1024','1025','1026','1027','1028','1029','1030','1031','1032','1033','1035','1036','1040','1043','1044','1045','1046','1047','1050','1051','1052','1053','1054','1055','1056','1057','1059','1060','1061','1063','1064','1067','1068','1071','1072','1073','1074','1075','1076','1077','1079','1080','1081','1082','1083','1084','1086','1087','1088','1089','1090','1091','1092','1093','1094','1095','1096','1097','1098','1099','1100','1102','1103','1104','1105','1107','1108','1109','1111','1113','1115','1116']
+    # self-reported left-handed participants
     left_list = ['1002','1008','1010','1021','1037','1039','1041','1048','1085','1101','1110','1112']
 
     subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
     reader = OrebaReader()
     exp_file = open(args.result_file_name,"w")
 
-    header = "id,dominant hand,most used eat,most used drink,most used all,\
-    eat right,eat left,eat both,\
-    drink right,drink left,drink both,\
-    all right,all left,all both,\
-    eat result,drink result,all result"
+    header = "id,dominant hand,"+\
+        "most used eat,most used drink,most used all,"+\
+        "G most used eat,G most used drink,G most used all,"+\
+        "eat right,eat left,eat both,"+\
+        "drink right,drink left,drink both,"+\
+        "all right,all left,all both,"+\
+        "G eat right,G eat left,G eat both,"+\
+        "G drink right,G drink left,G drink both,"+\
+        "G all right,G all left,G all both,"+\
+        "eat result,drink result,all result,"+\
+        "G eat result,G drink result,G all result"
+
     exp_file.write(header)
     exp_file.write('\n')
 
@@ -38,14 +47,12 @@ def main(args=None):
             right_list.remove(subject_id)
             continue
         logging.info("Working on subject {}".format(subject_id))
-        # Read acc and gyro
-        timestamps, left_acc, left_gyro, right_acc, right_gyro = \
-            reader.read_inert(args.src_dir, subject_id)
-        # Make hands uniform by flipping left to right if needed
-        dominant_hand = reader.read_dominant(args.src_dir, subject_id)
-        if dominant_hand.lower() == 'right':
+        timestamps, _, _, _, _ = reader.read_inert(args.src_dir, subject_id)
+        if str(subject_id) in right_list:
+            dominant_hand = 'right'
             right_list.remove(subject_id)
-        elif dominant_hand.lower() == 'left':
+        elif str(subject_id) in left_list:
+            dominant_hand = 'left'
             left_list.remove(subject_id)
         else:
             raise RuntimeError('{0} not in the list of right and left'.format(dominant_hand))
@@ -58,16 +65,28 @@ def main(args=None):
         label_3_left_all=0
         label_3_idle_all=0
         label_3_both_all=0
+        label_3_right_all_gesture=0
+        label_3_left_all_gesture=0
+        label_3_idle_all_gesture=0
+        label_3_both_all_gesture=0
 
         label_3_right_eat=0
         label_3_left_eat=0
         label_3_idle_eat=0
         label_3_both_eat=0
+        label_3_right_eat_gesture=0
+        label_3_left_eat_gesture=0
+        label_3_idle_eat_gesture=0
+        label_3_both_eat_gesture=0
 
         label_3_right_drink=0
         label_3_left_drink=0
         label_3_idle_drink=0
         label_3_both_drink=0
+        label_3_right_drink_gesture=0
+        label_3_left_drink_gesture=0
+        label_3_idle_drink_gesture=0
+        label_3_both_drink_gesture=0
             
         for i in range(len(label_3)):
             if label_3[i].lower() == "right":
@@ -81,7 +100,15 @@ def main(args=None):
             else:
                 print(label_3[i])
 
-        for i in range(len(label_3)):
+            if label_3[i].lower() == "right" and (i==0 or label_3[i-1].lower() != "right"):
+                label_3_right_all_gesture += 1
+            if label_3[i].lower() == "left" and (i==0 or label_3[i-1].lower() != "left"):
+                label_3_left_all_gesture += 1
+            elif label_3[i].lower() == "idle" and (i==0 or label_3[i-1].lower() != "idle"):
+                label_3_idle_all_gesture += 1
+            elif label_3[i].lower() == "both" and (i==0 or label_3[i-1].lower() != "both"):
+                label_3_both_all_gesture += 1
+
             if label_2[i].lower() == "eat":
                 if label_3[i].lower() == "right":
                     label_3_right_eat += 1
@@ -93,6 +120,16 @@ def main(args=None):
                     label_3_both_eat += 1
                 else:
                     print(label_3[i])
+
+            if label_2[i].lower() == "eat":
+                if label_3[i].lower() == "right" and (i==0 or label_3[i-1].lower() != "right"):
+                    label_3_right_eat_gesture += 1
+                if label_3[i].lower() == "left" and (i==0 or label_3[i-1].lower() != "left"):
+                    label_3_left_eat_gesture += 1
+                elif label_3[i].lower() == "idle" and (i==0 or label_3[i-1].lower() != "idle"):
+                    label_3_idle_eat_gesture += 1
+                elif label_3[i].lower() == "both" and (i==0 or label_3[i-1].lower() != "both"):
+                    label_3_both_eat_gesture += 1
 
             if label_2[i].lower() == "drink":
                 if label_3[i].lower() == "right":
@@ -106,6 +143,16 @@ def main(args=None):
                 else:
                     print(label_3[i])
 
+            if label_2[i].lower() == "drink":
+                if label_3[i].lower() == "right" and (i==0 or label_3[i-1].lower() != "right"):
+                    label_3_right_drink_gesture += 1
+                if label_3[i].lower() == "left" and (i==0 or label_3[i-1].lower() != "left"):
+                    label_3_left_drink_gesture += 1
+                elif label_3[i].lower() == "idle" and (i==0 or label_3[i-1].lower() != "idle"):
+                    label_3_idle_drink_gesture += 1
+                elif label_3[i].lower() == "both" and (i==0 or label_3[i-1].lower() != "both"):
+                    label_3_both_drink_gesture += 1
+
         if label_3_right_all > label_3_left_all:
             most_used_all = "right" 
         elif label_3_right_all < label_3_left_all:
@@ -113,7 +160,16 @@ def main(args=None):
         elif label_3_right_all == 0:
             most_used_all = "none" 
         else:
-            most_used_all = "both" 
+            most_used_all = dominant_hand # "both" 
+
+        if label_3_right_all_gesture > label_3_left_all_gesture:
+            most_used_all_gesture = "right" 
+        elif label_3_right_all_gesture < label_3_left_all_gesture:
+            most_used_all_gesture = "left" 
+        elif label_3_right_all_gesture == 0:
+            most_used_all_gesture = "none" 
+        else:
+            most_used_all_gesture = dominant_hand # "both" 
 
         if label_3_right_eat > label_3_left_eat:
             most_used_eat = "right" 
@@ -122,7 +178,16 @@ def main(args=None):
         elif label_3_right_eat == 0:
             most_used_eat = "none" 
         else:
-            most_used_eat = "both" 
+            most_used_eat = dominant_hand # "both" 
+
+        if label_3_right_eat_gesture > label_3_left_eat_gesture:
+            most_used_eat_gesture = "right" 
+        elif label_3_right_eat_gesture < label_3_left_eat_gesture:
+            most_used_eat_gesture = "left" 
+        elif label_3_right_eat_gesture == 0:
+            most_used_eat_gesture = "none" 
+        else:
+            most_used_eat_gesture = dominant_hand # "both" 
 
         if label_3_right_drink > label_3_left_drink:
             most_used_drink = "right" 
@@ -131,18 +196,36 @@ def main(args=None):
         elif label_3_right_drink == 0:
             most_used_drink = "none" 
         else:
-            most_used_drink = "both" 
+            most_used_drink = dominant_hand # "both" 
+
+        if label_3_right_drink_gesture > label_3_left_drink_gesture:
+            most_used_drink_gesture = "right" 
+        elif label_3_right_drink_gesture < label_3_left_drink_gesture:
+            most_used_drink_gesture = "left" 
+        elif label_3_right_drink_gesture == 0:
+            most_used_drink_gesture = "none" 
+        else:
+            most_used_drink_gesture = dominant_hand # "both" 
 
         result_eat = "OK" if dominant_hand == most_used_eat else "wrong"
         result_drink = "OK" if dominant_hand == most_used_drink else "wrong"
         result_all = "OK" if dominant_hand == most_used_all else "wrong"
 
-        line = subject_id + ',' + dominant_hand + ',' + most_used_eat + ',' + most_used_drink + ',' + most_used_all + ',' + \
+        result_eat_gesture = "OK" if dominant_hand == most_used_eat_gesture else "wrong"
+        result_drink_gesture = "OK" if dominant_hand == most_used_drink_gesture else "wrong"
+        result_all_gesture = "OK" if dominant_hand == most_used_all_gesture else "wrong"
+
+        line = subject_id + ',' + dominant_hand + ',' + \
+            most_used_eat + ',' + most_used_drink + ',' + most_used_all + ',' + \
+            most_used_eat_gesture + ',' + most_used_drink_gesture + ',' + most_used_all_gesture + ',' + \
             str(label_3_right_eat) + ',' + str(label_3_left_eat) + ',' + str(label_3_both_eat) + ',' + \
             str(label_3_right_drink) + ',' + str(label_3_left_drink) + ',' + str(label_3_both_drink) + ',' + \
             str(label_3_right_all) + ',' + str(label_3_left_all) + ',' + str(label_3_both_all) + ',' + \
-            result_eat + ',' + result_drink + ',' + result_all
-
+            str(label_3_right_eat_gesture) + ',' + str(label_3_left_eat_gesture) + ',' + str(label_3_both_eat_gesture) + ',' + \
+            str(label_3_right_drink_gesture) + ',' + str(label_3_left_drink_gesture) + ',' + str(label_3_both_drink_gesture) + ',' + \
+            str(label_3_right_all_gesture) + ',' + str(label_3_left_all_gesture) + ',' + str(label_3_both_all_gesture) + ',' + \
+            result_eat + ',' + result_drink + ',' + result_all + ',' +\
+            result_eat_gesture + ',' + result_drink_gesture + ',' + result_all_gesture
         exp_file.writelines(line)
         exp_file.write('\n')
 
@@ -157,6 +240,6 @@ def main(args=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='check if the hand mentioned the most in label3 (hand) matches with the participants dominant hand')
     parser.add_argument('--src_dir', type=str, default=r'\\uncle.newcastle.edu.au\entities\research\oreba\OREBA\Phase 1\Synchronised', nargs='?', help='Directory to search for data.')
-    parser.add_argument('--result_file_name', type=str, default=r'C:\H\PhD\ORIBA\Model\Code\data\verify_dom_hand.csv', nargs='?', help='The resut file name.')
+    parser.add_argument('--result_file_name', type=str, default=r'C:\H\PhD\ORIBA\Model\Code\data\verify_dom_hand_Gesture.csv', nargs='?', help='The resut file name.')
     args = parser.parse_args()
     main(args)

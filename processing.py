@@ -271,7 +271,7 @@ def process(args=None):
             timestamps, left_acc, left_gyro, right_acc, right_gyro = \
                 reader.read_inert(args.src_dir, subject_id)
             # Make hands uniform by flipping left to right if needed
-            dominant_hand = reader.read_dominant(args.src_dir, subject_id)
+            dominant_hand = reader.read_dominant(args.src_dir, subject_id, args.dom_hand_info_file_name)
             if args.exp_uniform == 'True' and dominant_hand == 'left':
                 right_acc_temp = copy.deepcopy(right_acc)
                 right_gyro_temp = copy.deepcopy(right_gyro)
@@ -454,5 +454,6 @@ if __name__ == '__main__':
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub forlder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub forlder per each file in test set if true.')
+    parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
     args = parser.parse_args()
     main(args)
