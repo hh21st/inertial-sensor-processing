@@ -166,34 +166,40 @@ def remove_gravity(acc, gyro, init_q, data_freq, update_freq, vis):
 def standardize(x):
     np_x = np.array(x)
     np_x -= np.mean(np_x, axis=0)
-    np_x /= np.std(np_x)
+    np_x /= np.std(np_x, axis=0)
     return list(np_x)
 
-def smoothe(x, size=15, order=3):
+def smoothe(x, smooth_mode='medfilt', size=5, order=3):
     if(size < 3):
         return x;
     if size <= order:
         order = size - 1
-    return signal.savgol_filter(x, size, order, axis=0)
+    if smooth_mode=='savgol_filter':
+        return signal.savgol_filter(x, size, order, axis=0)
+    elif smooth_mode=='medfilt':
+        return signal.medfilt(x, size)
+    else:
+        raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
 
-def preprocess(acc, gyro, sampling_rate, smo_window_size, mode, vis):
+def preprocess(acc, gyro, sampling_rate, smo_window_size, smooth_mode, mode, vis):
     """Preprocess the data"""
     if mode == 'raw':
         return acc, gyro
-    # 1. Remove gravity
-    # 1.1 Estimate initial quaternion
-    logging.info("Estimating initial quaternion")
-    init_q = estimate_initial_quaternion(acc, gyro, sampling_rate)
-    # 1.2 Remove gravity
-    logging.info("Removing gravity")
-    acc = remove_gravity(acc, gyro, init_q, sampling_rate, 16, vis)
-    if mode == 'grm':
-        return acc, gyro
+    if mode != 'std_no_grm':
+        # 1. Remove gravity
+        # 1.1 Estimate initial quaternion
+        logging.info("Estimating initial quaternion")
+        init_q = estimate_initial_quaternion(acc, gyro, sampling_rate)
+        # 1.2 Remove gravity
+        logging.info("Removing gravity")
+        acc = remove_gravity(acc, gyro, init_q, sampling_rate, 16, vis)
+        if mode == 'grm':
+            return acc, gyro
     # 2. Smoothing
     def _up_to_odd_integer(f):
         return int(np.ceil(f) // 2 * 2 + 1)
-    acc = smoothe(acc, _up_to_odd_integer(smo_window_size * sampling_rate))
-    gyro = smoothe(gyro, _up_to_odd_integer(smo_window_size * sampling_rate))
+    acc = smoothe(acc, smooth_mode, _up_to_odd_integer(smo_window_size))
+    gyro = smoothe(gyro, smooth_mode, _up_to_odd_integer(smo_window_size))
     if mode == 'smo':
         return acc, gyro
     # 3. Standardize
@@ -284,9 +290,9 @@ def process(args=None):
                 timestamps, args.sampling_rate, OREBA_FREQUENCY)
             # Preprocessing
             left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
-                args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
+                args.sampling_rate, args.smo_window_size, args.smooth_mode, args.preprocess, args.vis)
             right_acc_0, right_gyro_0 = preprocess(right_acc, right_gyro,
-                args.sampling_rate, args.smo_window_size, args.preprocess, args.vis)
+                args.sampling_rate, args.smo_window_size, args.smooth_mode, args.preprocess, args.vis)
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
@@ -447,8 +453,9 @@ if __name__ == '__main__':
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
-    parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std'), default='std', nargs='?', help='Preprocessing until which step')
-    parser.add_argument('--smo_window_size', type=float, default=0.125, nargs='?', help='Size of the smoothing window [sec].')
+    parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
+    parser.add_argument('--smo_window_size', type=float, default=5, nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter'), default='medfilt', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
