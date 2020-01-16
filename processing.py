@@ -178,6 +178,10 @@ def smoothe(x, smooth_mode='medfilt', size=5, order=3):
         return signal.savgol_filter(x, size, order, axis=0)
     elif smooth_mode=='medfilt':
         return signal.medfilt(x, size)
+    elif smooth_mode=='decimate':
+        return signal.decimate(x, 1, axis=0)
+    elif smooth_mode=='none':
+        return x
     else:
         raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
 
@@ -455,7 +459,7 @@ if __name__ == '__main__':
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=5, nargs='?', help='Size of the smoothing window [number of frames].')
-    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter'), default='medfilt', nargs='?', help='smoothing mode')
+    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
