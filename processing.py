@@ -179,11 +179,24 @@ def smoothe(x, smooth_mode='medfilt', size=5, order=3):
     elif smooth_mode=='medfilt':
         return signal.medfilt(x, size)
     elif smooth_mode=='decimate':
-        return signal.decimate(x, 1, axis=0)
+        return anti_alias(x)
     elif smooth_mode=='none':
         return x
     else:
         raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
+
+
+def anti_alias(x):
+    """
+    Applys an anti-aliasing filter.
+    An order 8 Chebyshev type I filter is used.
+    """
+    x = np.asarray(x)
+    system = signal.ltisys.dlti(*signal.cheby1(8, 0.05, 0.8))
+    b, a = system.num, system.den
+    a = np.asarray(a)
+    return signal.filtfilt(b, a, x, 0)
+
 
 def preprocess(acc, gyro, sampling_rate, smo_window_size, smooth_mode, mode, vis):
     """Preprocess the data"""
@@ -452,14 +465,14 @@ def main(args=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
-    parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
-    parser.add_argument('--exp_dir', type=str, default='Export', nargs='?', help='Directory for data export.')
+    parser.add_argument('--src_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp', nargs='?', help='Directory to search for data.')
+    parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp.gen\64_grm_my_dec_std_uni', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=float, default=5, nargs='?', help='Size of the smoothing window [number of frames].')
-    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='', nargs='?', help='smoothing mode')
+    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
