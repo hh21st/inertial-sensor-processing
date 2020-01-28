@@ -184,9 +184,9 @@ def main(args=None):
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
                 exp_file = "OREBA_" + subject_id + "_" + \
-                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + ".csv"
+                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + "." + args.exp_format
             else:
-                exp_file = subject_id + "_inert.csv"
+                exp_file = subject_id + "_inert." + args.exp_format
             if args.exp_dir == args.src_dir:
                 exp_path = os.path.join(args.exp_dir, subject_id, exp_file)
             else:
@@ -225,7 +225,8 @@ def main(args=None):
             if args.exp_mode == 'dev':
                 writer.write_dev(subject_id, timestamps, left_acc_0,
                     left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
-                    label_1, label_2, label_3, label_4, args.exp_uniform)
+                    label_1, label_2, label_3, label_4, args.exp_uniform,
+                    args.exp_format)
             else:
                 writer.write_pub(subject_id, timestamps, left_acc, left_acc_0,
                     left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
@@ -381,5 +382,6 @@ if __name__ == '__main__':
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
     parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
+    parser.add_argument('--exp_format', choices=('csv', 'tfrecords'), default='csv', nargs='?', help='Format for export')
     args = parser.parse_args()
     main(args)
