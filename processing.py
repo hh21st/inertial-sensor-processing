@@ -178,7 +178,7 @@ def main(args=None):
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = OrebaReader()
         for subject_id in subject_ids:
-            # skip over faulty data file (1074)
+            # skip over faulty data file (1074_1)
             if subject_id == "1074_1":
                 continue
             logging.info("Working on subject {}".format(subject_id))
@@ -371,8 +371,8 @@ if __name__ == '__main__':
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
-    parser.add_argument('--smo_window_size', type=int, default='', nargs='?', help='Size of the smoothing window [number of frames].')
-    parser.add_argument('--smo_order', type=int, default='', nargs='?', help='The polynomial used in Savgol filter.')
+    parser.add_argument('--smo_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smo_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
     parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
