@@ -3,3 +3,4 @@ pygame
 numpy-quaternion
 JPype1
 xlrd
+scipy
