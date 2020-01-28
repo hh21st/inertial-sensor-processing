@@ -169,8 +169,8 @@ def standardize(x):
     np_x /= np.std(np_x, axis=0)
     return list(np_x)
 
-def smoothe(x, smooth_mode='medfilt', size=5, order=3):
-    if(size < 3):
+def smoothe(x, smooth_mode, size, order):
+    if(smooth_mode != 'decimate' and size < 3):
         return x;
     if size <= order:
         order = size - 1
@@ -198,7 +198,7 @@ def anti_alias(x):
     return signal.filtfilt(b, a, x, 0)
 
 
-def preprocess(acc, gyro, sampling_rate, smo_window_size, smooth_mode, mode, vis):
+def preprocess(acc, gyro, sampling_rate, smooth_mode, smo_window_size, smo_order, mode, vis):
     """Preprocess the data"""
     if mode == 'raw':
         return acc, gyro
@@ -215,8 +215,8 @@ def preprocess(acc, gyro, sampling_rate, smo_window_size, smooth_mode, mode, vis
     # 2. Smoothing
     def _up_to_odd_integer(f):
         return int(np.ceil(f) // 2 * 2 + 1)
-    acc = smoothe(acc, smooth_mode, _up_to_odd_integer(smo_window_size))
-    gyro = smoothe(gyro, smooth_mode, _up_to_odd_integer(smo_window_size))
+    acc = smoothe(acc, smooth_mode, _up_to_odd_integer(smo_window_size), smo_order)
+    gyro = smoothe(gyro, smooth_mode, _up_to_odd_integer(smo_window_size), smo_order)
     if mode == 'smo':
         return acc, gyro
     # 3. Standardize
@@ -272,7 +272,7 @@ def process(args=None):
         reader = OrebaReader()
         for subject_id in subject_ids:
             # skip over faulty data file (1074)
-            if subject_id == "1074":
+            if subject_id == "1074_1":
                 continue
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
@@ -307,9 +307,9 @@ def process(args=None):
                 timestamps, args.sampling_rate, OREBA_FREQUENCY)
             # Preprocessing
             left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
-                args.sampling_rate, args.smo_window_size, args.smooth_mode, args.preprocess, args.vis)
+                args.sampling_rate, args.smooth_mode, args.smo_window_size, args.smo_order, args.preprocess, args.vis)
             right_acc_0, right_gyro_0 = preprocess(right_acc, right_gyro,
-                args.sampling_rate, args.smo_window_size, args.smooth_mode, args.preprocess, args.vis)
+                args.sampling_rate, args.smooth_mode, args.smo_window_size, args.smo_order, args.preprocess, args.vis)
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
@@ -471,7 +471,8 @@ if __name__ == '__main__':
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
-    parser.add_argument('--smo_window_size', type=float, default=5, nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smo_window_size', type=int, default='', nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smo_order', type=int, default='', nargs='?', help='The polynomial used in Savgol filter.')
     parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
