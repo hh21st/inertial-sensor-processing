@@ -26,98 +26,6 @@ GRAVITY = 9.80665
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
-class Node:
-    """A node is an edge of the cuboid"""
-    def __init__(self, coords, color):
-        self.x = coords[0]
-        self.y = coords[1]
-        self.z = coords[2]
-        self.color = color
-
-class Face:
-    """A face of the cuboid is defined using the indices of four nodes"""
-    def __init__(self, nodeIdxs, color):
-        self.nodeIdxs = nodeIdxs
-        self.color = color
-
-class Cuboid:
-    """The cuboid"""
-    def __init__(self, quaternion):
-        self.nodes = []
-        self.faces = []
-        self.q = quaternion
-
-    def set_nodes(self, nodes):
-        self.nodes = nodes
-
-    def set_faces(self, faces):
-        self.faces = faces
-
-    def set_quaternion(self, q):
-        self.q = q
-
-    def rotate_quaternion(self, w, dt):
-        self.q = dt/2 * self.q * np.quaternion(0, w[0], w[1], w[2]) + self.q
-
-    def rotate_point(self, point):
-        return quaternion.rotate_vectors(self.q, point)
-
-    def convert_to_computer_frame(self, point):
-        computerFrameChangeMatrix = np.array([[-1, 0, 0], [0, 0, -1], [0, -1, 0]])
-        return np.matmul(computerFrameChangeMatrix, point)
-
-    def get_euler_attitude(self):
-        def _rad2deg(rad):
-            return rad / np.pi * 180
-        m = quaternion.as_rotation_matrix(self.q)
-        test = -m[2, 0]
-        if test > 0.99999:
-            yaw = 0
-            pitch = np.pi / 2
-            roll = np.arctan2(m[0, 1], m[0, 2])
-        elif test < -0.99999:
-            yaw = 0
-            pitch = -np.pi / 2
-            roll = np.arctan2(-m[0, 1], -m[0, 2])
-        else:
-            yaw = np.arctan2(m[1, 0], m[0, 0])
-            pitch = np.arcsin(-m[2, 0])
-            roll = np.arctan2(m[2, 1], m[2, 2])
-        yaw = _rad2deg(yaw)
-        pitch = _rad2deg(pitch)
-        roll = _rad2deg(roll)
-        return yaw, pitch, roll
-
-def initialize_cuboid(quaternion):
-    """Initialize cuboid with nodes and faces"""
-
-    # The cuboid with initial quaternion
-    cuboid = Cuboid(quaternion)
-
-    # Define nodes
-    nodes = []
-    nodes.append(Node([-1.5, -1, -0.1], [255, 255, 255]))
-    nodes.append(Node([-1.5, -1, 0.1], [255, 255, 255]))
-    nodes.append(Node([-1.5, 1, -0.1], [255, 255, 255]))
-    nodes.append(Node([-1.5, 1, 0.1], [255, 255, 255]))
-    nodes.append(Node([1.5, -1, -0.1], [255, 255, 255]))
-    nodes.append(Node([1.5, -1, 0.1], [255, 255, 255]))
-    nodes.append(Node([1.5, 1, -0.1], [255, 255, 255]))
-    nodes.append(Node([1.5, 1, 0.1], [255, 255, 255]))
-    cuboid.set_nodes(nodes)
-
-    # Define faces
-    faces = []
-    faces.append(Face([0, 2, 6, 4], [255, 0, 255]))
-    faces.append(Face([0, 1, 3, 2], [255, 0, 0]))
-    faces.append(Face([1, 3, 7, 5], [0, 255, 0]))
-    faces.append(Face([4, 5, 7, 6], [0, 0, 255]))
-    faces.append(Face([2, 3, 7, 6], [0, 255, 255]))
-    faces.append(Face([0, 1, 5, 4], [255, 255, 0]))
-    cuboid.set_faces(faces)
-
-    return cuboid
-
 def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=20):
     """Estimate the initital quaternion from evenly distributed possibilities"""
     # Uniformly sampled possible initial quaternions
@@ -137,19 +45,19 @@ def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=20):
 def remove_gravity(acc, gyro, init_q, data_freq, update_freq, vis):
     """Remove gravity for one hand."""
     # Initialize
-    cuboid = initialize_cuboid(init_q)
-    madgwick = MadgwickFusion(cuboid.q, data_freq)
+    madgwick = MadgwickFusion(init_q, data_freq)
     # Initialize visualization
     pv = None
     if vis == 'True':
-        pv = PygameViewer(640, 480, cuboid, data_freq)
+        pv = PygameViewer(640, 480, init_q, data_freq)
     # Process
     acc_0 = []
     i = 0
     for acc_t, gyro_t in zip(acc, gyro):
         # Sensor fusion update
         madgwick.update(acc_t, gyro_t)
-        cuboid.set_quaternion(madgwick.q)
+        if vis == 'True':
+            pv.set_quaternion(madgwick.q)
         # Remove gravity from acceleration
         acc_t0 = quaternion.rotate_vectors(madgwick.q, np.array(acc_t))
         acc_t0 -= np.array([0, 0, 1])
