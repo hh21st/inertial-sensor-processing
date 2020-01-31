@@ -222,16 +222,10 @@ def main(args=None):
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
             # Write csv
             writer = OrebaWriter(exp_path)
-            if args.exp_mode == 'dev':
-                writer.write_dev(subject_id, timestamps, left_acc_0,
-                    left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
-                    label_1, label_2, label_3, label_4, args.exp_uniform,
-                    args.exp_format)
-            else:
-                writer.write_pub(subject_id, timestamps, left_acc, left_acc_0,
-                    left_gyro, left_gyro_0, right_acc, right_acc_0, right_gyro,
-                    right_gyro_0, dominant_hand, label_1, label_2, label_3,
-                    label_4)
+            writer.write(subject_id, timestamps, left_acc_0,
+                left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
+                label_1, label_2, label_3, label_4, args.exp_uniform,
+                args.exp_format)
         reader.done()
 
     elif args.database == 'Clemson':
@@ -286,14 +280,9 @@ def main(args=None):
                 label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
                 # Write csv
                 writer = ClemsonWriter(exp_path)
-                if args.exp_mode == 'dev':
-                    writer.write_dev(subject_id, session, timestamps, acc_0,
-                        gyro_0, hand, label_1, label_2, label_3, label_4,
-                        label_5)
-                else:
-                    writer.write_pub(subject_id, session, timestamps, acc,
-                        acc_0, gyro, gyro_0, hand, label_1, label_2, label_3,
-                        label_4, label_5)
+                writer.write(subject_id, session, timestamps, acc_0,
+                    gyro_0, hand, label_1, label_2, label_3, label_4,
+                    label_5)
 
     elif args.database == "FIC":
         # For Food Intake Cycle (FIC) dataset
@@ -348,12 +337,8 @@ def main(args=None):
             label_1 = reader.get_labels(annotations, timestamps)
             # Write csv
             writer = FICWriter(exp_path)
-            if args.exp_mode == 'dev':
-                writer.write_dev(subject_id, session_id, timestamps, acc_0,
-                    gyro_0, label_1, metadata['timestamps_raw_units'])
-            else:
-                writer.write_pub(subject_id, session_id, timestamps, acc,
-                    acc_0, gyro, gyro_0, label_1, metadata['timestamps_raw_units'])
+            writer.write(subject_id, session_id, timestamps, acc_0,
+                gyro_0, label_1, metadata['timestamps_raw_units'])
 
     else: raise RuntimeError('No valid reader selected')
 
