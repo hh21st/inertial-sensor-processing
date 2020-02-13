@@ -113,6 +113,41 @@ class OrebaReader:
     def done(self):
         jpype.shutdownJVM()
 
+class ExperimentReader:
+    def __init__(self):
+        jpype.addClassPath('org.unisens.jar')
+        jpype.addClassPath('org.unisens.ri.jar')
+        jpype.startJVM()
+
+    def read_inert(self, src_dir, subject_id, left_folder, right_folder):
+        def _parse_j2py(jpype_arr):
+            """Convert from double[][] to list"""
+            return [list(i) for i in jpype_arr]
+        dir_left = os.path.join(src_dir, subject_id, left_folder)
+        dir_right = os.path.join(src_dir, subject_id, right_folder)
+        from org.unisens import UnisensFactoryBuilder
+        jUnisensFactory = UnisensFactoryBuilder.createFactory()
+        jUnisensLeft = jUnisensFactory.createUnisens(dir_left)
+        jLeftAccEntry = jUnisensLeft.getEntry('acc.bin')
+        jLeftGyroEntry = jUnisensLeft.getEntry('angularrate.bin')
+        jUnisensRight = jUnisensFactory.createUnisens(dir_right)
+        jRightAccEntry = jUnisensRight.getEntry('acc.bin')
+        jRightGyroEntry = jUnisensRight.getEntry('angularrate.bin')
+        countLeft = jLeftAccEntry.getCount()
+        countRight = jRightAccEntry.getCount()
+        sample_rate = jLeftAccEntry.getSampleRate()
+        count = min(countLeft, countRight)
+        left_acc = _parse_j2py(jLeftAccEntry.readScaled(count))
+        left_gyro = _parse_j2py(jLeftGyroEntry.readScaled(count))
+        right_acc = _parse_j2py(jRightAccEntry.readScaled(count))
+        right_gyro = _parse_j2py(jRightGyroEntry.readScaled(count))
+        dt = 1000000 // OREBA_FREQUENCY
+        timestamps = range(0, count*dt, dt)
+        return timestamps, left_acc, left_gyro, right_acc, right_gyro
+
+    def done(self):
+        jpype.shutdownJVM()
+
 class ClemsonReader:
     def read_inert(self, data_dir, subject_id, session):
         dir = os.path.join(data_dir, subject_id, session)

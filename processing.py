@@ -2,7 +2,7 @@ import numpy as np
 import quaternion
 from visualization import PygameViewer
 from fusion import MadgwickFusion
-from reader import OrebaReader, ClemsonReader, FICReader
+from reader import OrebaReader, ClemsonReader, FICReader, ExperimentReader
 from writer import OrebaWriter, ClemsonWriter, FICWriter
 import csv
 import argparse
@@ -14,6 +14,7 @@ from math import radians, degrees
 import itertools
 from data_organiser import DataOrganiser
 from utils import *
+import matplotlib.pyplot as plt
 
 OREBA_FREQUENCY = 64
 CLEMSON_FREQUENCY = 15
@@ -164,9 +165,15 @@ def resample(acc, gyro, target_rate, units, total_time):
     return timestamps, acc, gyro
 
 def flip(acc, gyro):
-    """Flip left to right hand or right hand to left hand"""
+    """Flip left to right hand or right hand to left hand - position 1"""
     acc = np.multiply(acc, [1, -1, 1])
     gyro = np.multiply(gyro, [-1, 1, -1])
+    return acc, gyro
+
+def flip2(acc, gyro):
+    """Flip left to right hand or right hand to left hand - position 2"""
+    acc = np.multiply(acc, [-1, 1, 1])
+    gyro = np.multiply(gyro, [1, -1, -1])
     return acc, gyro
 
 def main(args=None):
@@ -186,7 +193,7 @@ def main(args=None):
                 exp_file = "OREBA_" + subject_id + "_" + \
                     str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + "." + args.exp_format
             else:
-                exp_file = subject_id + "_inert." + args.exp_format
+                exp_file = subject_id + "_inertial_raw." + args.exp_format
             if args.exp_dir == args.src_dir:
                 exp_path = os.path.join(args.exp_dir, subject_id, exp_file)
             else:
@@ -340,6 +347,20 @@ def main(args=None):
             writer.write(subject_id, session_id, timestamps, acc_0,
                 gyro_0, label_1, metadata['timestamps_raw_units'])
 
+    elif args.database == 'Experiment':
+        reader = ExperimentReader()
+        timestamps, left_acc, left_gyro, right_acc, right_gyro = \
+            reader.read_inert(args.src_dir, "Exp2", "02363", "02366")
+        left_acc, right_acc = np.array(left_acc), np.array(right_acc)
+        left_gyro, right_gyro = np.array(left_gyro), np.array(right_gyro)
+        right_acc, right_gyro = flip(right_acc, right_gyro)
+        #plt.plot(left_acc[:,2])
+        #plt.plot(right_acc[:,2])
+        plt.plot(left_gyro[:,2])
+        plt.plot(right_gyro[:,2])
+        plt.show()
+        exit()
+
     else: raise RuntimeError('No valid reader selected')
 
     if get_bool(args.organise_data):
@@ -354,7 +375,7 @@ if __name__ == '__main__':
     parser.add_argument('--src_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp.gen\64_grm_my_dec_std_uni', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
-    parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which database reader/writer to use')
+    parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
     parser.add_argument('--smo_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames].')
