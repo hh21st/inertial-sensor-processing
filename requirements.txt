@@ -4,3 +4,4 @@ numpy-quaternion
 JPype1
 xlrd
 scipy
+tensorflow==1.15.2
