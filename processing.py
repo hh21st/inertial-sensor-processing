@@ -388,6 +388,6 @@ if __name__ == '__main__':
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
     parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
-    parser.add_argument('--exp_format', choices=('csv', 'tfrecords'), default='csv', nargs='?', help='Format for export')
+    parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
     args = parser.parse_args()
     main(args)

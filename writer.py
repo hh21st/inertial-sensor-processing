@@ -55,7 +55,7 @@ class OrebaWriter:
                             right_gyro[i][0], right_gyro[i][1], right_gyro[i][2],
                             dominant_hand, label_1[i], label_2[i], label_3[i],
                             label_4[i]])
-        elif exp_format == 'tfrecords':
+        elif exp_format == 'tfrecord':
             with tf.io.TFRecordWriter(self.path) as tfrecord_writer:
                 for i in range(0, len(timestamps)):
                     if exp_uniform == 'True':
