@@ -78,10 +78,10 @@ def main(args=None):
         make_subfolders_test=get_bool(args.make_subfolders_test))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='devides data into training, validation and test sets')
+    parser = argparse.ArgumentParser(description='divides data into training, validation and test sets')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets.')
-    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub forlder per each file in validation set if true.')
-    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub forlder per each file in test set if true.')
+    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
+    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
     args = parser.parse_args()
     main(args)
