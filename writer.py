@@ -98,28 +98,44 @@ class OrebaWriter:
             for i in range(0, len(ids)):
                 writer.writerow([ids[i], n_gestures[i], t_gestures[i], t_total[i]])
 
-
 class ClemsonWriter:
     def __init__(self, path):
         self.path = path
 
     def write(self, subject_id, session_id, timestamps, acc, gyro, hand,
-        label_1, label_2, label_3, label_4, label_5):
+        label_1, label_2, label_3, label_4, label_5, exp_format):
         frame_ids = range(0, len(timestamps))
         id = subject_id + "_" + session_id
         def _format_time(t):
             return (datetime.min + timedelta(microseconds=t)).time().strftime('%H:%M:%S.%f')
         timestamps = [_format_time(t) for t in timestamps]
-        with open(self.path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',')
-            writer.writerow(["id", "frame_id", "timestamp", "acc_x", "acc_y",
-                "acc_z", "gyro_x", "gyro_y", "gyro_z", "hand",
-                "label_1", "label_2", "label_3", "label_4", "label_5"])
-            for i in range(0, len(timestamps)):
-                writer.writerow([id, frame_ids[i], timestamps[i],
-                    acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
-                    gyro[i][2], hand, label_1[i], label_2[i], label_3[i],
-                    label_4[i], label_5[i]])
+        if exp_format == 'csv':
+            with open(self.path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',')
+                writer.writerow(["id", "frame_id", "timestamp", "acc_x", "acc_y",
+                    "acc_z", "gyro_x", "gyro_y", "gyro_z", "hand",
+                    "label_1", "label_2", "label_3", "label_4", "label_5"])
+                for i in range(0, len(timestamps)):
+                    writer.writerow([id, frame_ids[i], timestamps[i],
+                        acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
+                        gyro[i][2], hand, label_1[i], label_2[i], label_3[i],
+                        label_4[i], label_5[i]])
+        elif exp_format == 'tfrecord':
+            with tf.io.TFRecordWriter(self.path) as tfrecord_writer:
+                for i in range(0, len(timestamps)):
+                    example = tf.train.Example(features=tf.train.Features(feature={
+                        'example/subject_id': _bytes_feature(id.encode()),
+                        'example/frame_id': _int64_feature(frame_ids[i]),
+                        'example/timestamp': _bytes_feature(timestamps[i].encode()),
+                        'example/acc': _floats_feature(acc[i].ravel()),
+                        'example/gyro': _floats_feature(gyro[i].ravel()),
+                        'example/label_1': _bytes_feature(label_1[i].encode()),
+                        'example/label_2': _bytes_feature(label_2[i].encode()),
+                        'example/label_3': _bytes_feature(label_3[i].encode()),
+                        'example/label_4': _bytes_feature(label_4[i].encode()),
+                        'example/label_5': _bytes_feature(label_5[i].encode())
+                    }))
+                    tfrecord_writer.write(example.SerializeToString())
 
     def write_summary(self, ids, n_gestures, t_gestures, t_total):
         with open(self.path, 'w', newline='') as csvfile:
@@ -128,28 +144,37 @@ class ClemsonWriter:
             for i in range(0, len(ids)):
                 writer.writerow([ids[i], n_gestures[i], t_gestures[i], t_total[i]])
 
-
 class FICWriter:
     def __init__(self, path):
         self.path = path
 
-    def write(self, subject_id, session_id, timestamps, acc, gyro,
-        label_1, units):
-        frame_ids = range(0, len(timestamps))
+    def write(self, subject_id, session_id, timestamps, acc, gyro, label_1, exp_format):
+        frame_ids = list(range(0, len(timestamps)))
         id = str(subject_id) + "_" + str(session_id)
-        def _format_time(t, units):
-            if units == 'nanos':
-                t /= 1000000
-            return (datetime.min + timedelta(milliseconds=t)).time().strftime('%H:%M:%S.%f')
-        timestamps = [_format_time(t, units) for t in timestamps]
-        with open(self.path, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',')
-            writer.writerow(["id", "frame_id", "timestamp", "acc_x", "acc_y",
-                "acc_z", "gyro_x", "gyro_y", "gyro_z", "label_1"])
-            for i in range(0, len(timestamps)):
-                writer.writerow([id, frame_ids[i], timestamps[i],
-                    acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
-                    gyro[i][2], label_1[i]])
+        def _format_time(t):
+            return (datetime.min + timedelta(seconds=t)).time().strftime('%H:%M:%S.%f')
+        timestamps = [_format_time(t) for t in timestamps]
+        if exp_format == 'csv':
+            with open(self.path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',')
+                writer.writerow(["id", "frame_id", "timestamp", "acc_x", "acc_y",
+                    "acc_z", "gyro_x", "gyro_y", "gyro_z", "label_1"])
+                for i in range(0, len(timestamps)):
+                    writer.writerow([id, frame_ids[i], timestamps[i],
+                        acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
+                        gyro[i][2], label_1[i]])
+        elif exp_format == 'tfrecord':
+            with tf.io.TFRecordWriter(self.path) as tfrecord_writer:
+                for i in range(0, len(timestamps)):
+                    example = tf.train.Example(features=tf.train.Features(feature={
+                        'example/subject_id': _bytes_feature(id.encode()),
+                        'example/frame_id': _int64_feature(frame_ids[i]),
+                        'example/timestamp': _bytes_feature(timestamps[i].encode()),
+                        'example/acc': _floats_feature(acc[i].ravel()),
+                        'example/gyro': _floats_feature(gyro[i].ravel()),
+                        'example/label_1': _bytes_feature(label_1[i].encode())
+                    }))
+                    tfrecord_writer.write(example.SerializeToString())
 
     def write_summary(self, ids, n_gestures, t_gestures, t_total):
         with open(self.path, 'w', newline='') as csvfile:

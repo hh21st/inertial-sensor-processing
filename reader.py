@@ -181,6 +181,8 @@ class ClemsonReader:
                 label_1.append(row[0])
                 start_time.append(_index_to_ms(int(row[1])))
                 end_time.append(_index_to_ms(int(row[2])))
+        print(label_1)
+        exit()
         # Read bite ground truth by matching with gestures
         label_2, label_3, label_4, label_5 = [], [], [], []
         for i in range(0, len(label_1)):

@@ -37,12 +37,12 @@ def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=20):
         num = seconds * data_freq
         q = np.quaternion(q)
         # We are assuming that there is not much force except gravity
-        acc_0 = remove_gravity(acc[0:num], gyro[0:num], q, data_freq, 0, False)
+        acc_0 = gravity_removal(acc[0:num], gyro[0:num], q, data_freq, 0, False)
         # If gravity is successfully removed, absolute values are low
         loss.append(np.sum(np.absolute(acc_0)))
     return qs[np.argmin(loss)]
 
-def remove_gravity(acc, gyro, init_q, data_freq, update_freq, vis):
+def gravity_removal(acc, gyro, init_q, data_freq, update_freq, vis):
     """Remove gravity for one hand."""
     # Initialize
     madgwick = MadgwickFusion(init_q, data_freq)
@@ -71,63 +71,49 @@ def remove_gravity(acc, gyro, init_q, data_freq, update_freq, vis):
         i += 1
     return acc_0
 
-def standardize(x):
+def standardization(x):
     np_x = np.array(x)
     np_x -= np.mean(np_x, axis=0)
     np_x /= np.std(np_x, axis=0)
     return list(np_x)
 
-def smoothe(x, smooth_mode, size, order):
-    if(smooth_mode != 'decimate' and size < 3):
-        return x;
-    if size <= order:
-        order = size - 1
-    if smooth_mode=='savgol_filter':
+def smoothing(x, mode, size, order):
+    if size < 3 or size <= order:
+        RuntimeError('Smoothing size {0} is too small.'.format(size))
+        #return x;
+    #if size <= order:
+    #    order = size - 1
+    if mode == 'savgol_filter':
         return signal.savgol_filter(x, size, order, axis=0)
-    elif smooth_mode=='medfilt':
+    elif mode == 'medfilt':
         return signal.medfilt(x, size)
-    elif smooth_mode=='decimate':
-        return anti_alias(x)
-    elif smooth_mode=='none':
-        return x
     else:
-        raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
+        raise RuntimeError('Smoothing mode {0} is not supported.'.format(mode))
 
-def anti_alias(x):
-    """
-    Applys an anti-aliasing filter.
-    An order 8 Chebyshev type I filter is used.
-    """
-    x = np.asarray(x)
-    system = signal.ltisys.dlti(*signal.cheby1(8, 0.05, 0.8))
-    b, a = system.num, system.den
-    a = np.asarray(a)
-    return signal.filtfilt(b, a, x, 0)
-
-def preprocess(acc, gyro, sampling_rate, smooth_mode, smo_window_size, smo_order, mode, vis):
+def preprocess(acc, gyro, sampling_rate, smoothing_mode, smoothing_window_size,
+    smoothing_order, use_vis, use_gravity_removal, use_smoothing,
+    use_standardization):
     """Preprocess the data"""
-    if mode == 'raw':
-        return acc, gyro
-    if mode != 'std_no_grm':
-        # 1. Remove gravity
+    # 1. Remove gravity if enabled
+    if use_gravity_removal:
         # 1.1 Estimate initial quaternion
         logging.info("Estimating initial quaternion")
         init_q = estimate_initial_quaternion(acc, gyro, sampling_rate)
         # 1.2 Remove gravity
         logging.info("Removing gravity")
-        acc = remove_gravity(acc, gyro, init_q, sampling_rate, 16, vis)
-        if mode == 'grm':
-            return acc, gyro
-    # 2. Smoothing
-    def _up_to_odd_integer(f):
-        return int(np.ceil(f) // 2 * 2 + 1)
-    acc = smoothe(acc, smooth_mode, _up_to_odd_integer(smo_window_size), smo_order)
-    gyro = smoothe(gyro, smooth_mode, _up_to_odd_integer(smo_window_size), smo_order)
-    if mode == 'smo':
-        return acc, gyro
-    # 3. Standardize
-    acc = standardize(acc)
-    gyro = standardize(gyro)
+        acc = gravity_removal(acc, gyro, init_q, sampling_rate, 16, use_vis)
+    # 2. Apply smoothing if enabled
+    if use_smoothing:
+        def _up_to_odd_integer(f):
+            return int(np.ceil(f) // 2 * 2 + 1)
+        acc = smoothing(acc, mode=smoothing_mode,
+            size=_up_to_odd_integer(smo_window_size), order=smoothing_order)
+        gyro = smoothing(gyro, mode=smoothing_mode,
+            size=_up_to_odd_integer(smo_window_size), order=smoothing_order)
+    # 3, Apply standardization if enabled
+    if use_standardization:
+        acc = standardization(acc)
+        gyro = standardization(gyro)
 
     return acc, gyro
 
@@ -190,10 +176,14 @@ def main(args=None):
                 continue
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
-                exp_file = "OREBA_" + subject_id + "_" + \
-                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + "." + args.exp_format
+                pp_s = "" +                                         \
+                    ("_grm") if args.use_gravity_removal else "" +  \
+                    ("_smo") if args.use_smoothing else "" +        \
+                    ("_std") if args.use_standardization else "" +  \
+                    ("_uni" if args.exp_uniform else "")
+                exp_file = "OREBA_" + subject_id + pp_s + "." + args.exp_format
             else:
-                exp_file = subject_id + "_inertial_raw." + args.exp_format
+                exp_file = subject_id + "_inertial." + args.exp_format
             if args.exp_dir == args.src_dir:
                 exp_path = os.path.join(args.exp_dir, subject_id, exp_file)
             else:
@@ -221,16 +211,22 @@ def main(args=None):
                 timestamps, args.sampling_rate, OREBA_FREQUENCY)
             # Preprocessing
             left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
-                args.sampling_rate, args.smooth_mode, args.smo_window_size, args.smo_order, args.preprocess, args.vis)
+                args.sampling_rate, args.smoothing_mode,
+                args.smoothing_window_size, args.smoothing_order,
+                args.use_vis, args.use_gravity_removal, args.use_smoothing,
+                args.use_standardization)
             right_acc_0, right_gyro_0 = preprocess(right_acc, right_gyro,
-                args.sampling_rate, args.smooth_mode, args.smo_window_size, args.smo_order, args.preprocess, args.vis)
+                args.sampling_rate, args.smoothing_mode,
+                args.smoothing_window_size, args.smoothing_order,
+                args.use_vis, args.use_gravity_removal, args.use_smoothing,
+                args.use_standardization)
             # Read annotations
             annotations = reader.read_annotations(args.src_dir, subject_id)
             label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
             # Write csv
             writer = OrebaWriter(exp_path)
-            writer.write(subject_id, timestamps, left_acc_0,
-                left_gyro_0, right_acc_0, right_gyro_0, dominant_hand,
+            writer.write(subject_id, timestamps, left_acc_0, left_gyro_0,
+                right_acc_0, right_gyro_0, dominant_hand,
                 label_1, label_2, label_3, label_4, args.exp_uniform,
                 args.exp_format)
         reader.done()
@@ -250,11 +246,17 @@ def main(args=None):
                 # Make sure export dir exists
                 if not os.path.exists(args.exp_dir):
                     os.makedirs(args.exp_dir)
+                # Make filename
                 if args.exp_mode == 'dev':
-                    exp_file = "Clemson_" + subject_id + "_" + session + \
-                        "_15_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
+                    pp_s = "" +                                             \
+                        ("_grm") if args.use_gravity_removal else "" +      \
+                        ("_smo") if args.use_smoothing else "" +            \
+                        ("_std") if args.use_standardization else "" +      \
+                        ("_uni" if args.exp_uniform else "")
+                    exp_file = "Clemson_" + subject_id + "_" + session +    \
+                        pp_s + "." + args.exp_format
                 else:
-                    exp_file = subject_id + "_" + session + ".csv"
+                    exp_file = subject_id + "_" + session + "." + args.exp_format
                 exp_path = os.path.join(args.exp_dir, exp_file)
                 # Skip if export file already exists
                 if os.path.isfile(exp_path):
@@ -281,7 +283,9 @@ def main(args=None):
                     acc, gyro = flip(acc, gyro)
                 # Preprocessing
                 acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
-                    args.smo_window_size, args.preprocess, args.vis)
+                    args.smoothing_mode, args.smoothing_window_size,
+                    args.smoothing_order, args.use_vis, args.use_gravity_removal,
+                    args.use_smoothing, args.use_standardization)
                 # Read annotations
                 annotations = reader.read_annotations(gesture_dir, bite_dir)
                 label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
@@ -289,7 +293,7 @@ def main(args=None):
                 writer = ClemsonWriter(exp_path)
                 writer.write(subject_id, session, timestamps, acc_0,
                     gyro_0, hand, label_1, label_2, label_3, label_4,
-                    label_5)
+                    label_5, args.exp_format)
 
     elif args.database == "FIC":
         # For Food Intake Cycle (FIC) dataset
@@ -302,50 +306,30 @@ def main(args=None):
         for i in range(0, len(data['subject_id'])):
             subject_id = data['subject_id'][i]
             session_id = data['session_id'][i]
-            metadata = data['metadata'][i]
             logging.info("Working on subject {}, session {}".format(subject_id, session_id))
             # Make sure export dir exists
             if not os.path.exists(args.exp_dir):
                 os.makedirs(args.exp_dir)
-            if args.exp_mode == 'dev':
-                exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
-                    "_" + str(args.sampling_rate) + "_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
-            else:
-                exp_file = str(subject_id) + "_" + str(session_id) + ".csv"
+            exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
+                "." + args.exp_format
             exp_path = os.path.join(args.exp_dir, exp_file)
             # Skip if export file already exists
             if os.path.isfile(exp_path):
                 logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session_id))
                 continue
             # Read acc and gyro
-            acc = data['raw_signals'][i]['accelerometer']
-            gyro = data['raw_signals'][i]['gyroscope']
-            # TODO Once we get information, transform/flip data here.
-            # In this dataset, raw acc and gyro are not temporally aligned.
-            # Align acc and gyro
-            start_time = np.max([acc[0,0], gyro[0,0]])
-            end_time = np.min([acc[acc.shape[0]-1,0], gyro[gyro.shape[0]-1,0]])
-            total_time = end_time - start_time
-            acc = acc[np.where(acc==start_time)[0][0]:np.where(acc==end_time)[0][0],1:4]
-            gyro = gyro[np.where(gyro==start_time)[0][0]:np.where(gyro==end_time)[0][0],1:4]
-            # Convert gyro to deg/s if necessary
-            if metadata['gyroscope_raw_units'] == 'rad/sec':
-                gyro = np.degrees(gyro)
-            if metadata['accelerometer_raw_units'] == 'm/s^2':
-                acc /= GRAVITY
-            # Resample
-            timestamps, acc, gyro = resample(acc, gyro, args.sampling_rate,
-                metadata['timestamps_raw_units'], total_time)
-            # Preprocessing
-            acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
-                args.smo_window_size, args.preprocess, args.vis)
-            # Read annotations
+            timestamps = data['signals'][i][:,0]
+            acc = data['signals'][i][:,1:4]
+            gyro = data['signals'][i][:,4:7]
             annotations = data['bite_gt'][i]
             label_1 = reader.get_labels(annotations, timestamps)
-            # Write csv
+            # Standardize data
+            acc = standardization(acc)
+            gyro = standardization(gyro)
+            # Write data
             writer = FICWriter(exp_path)
-            writer.write(subject_id, session_id, timestamps, acc_0,
-                gyro_0, label_1, metadata['timestamps_raw_units'])
+            writer.write(subject_id, session_id, timestamps, acc, gyro,
+                label_1, args.exp_format)
 
     elif args.database == 'Experiment':
         reader = ExperimentReader()
@@ -363,31 +347,44 @@ def main(args=None):
 
     else: raise RuntimeError('No valid reader selected')
 
-    if get_bool(args.organise_data):
+    if args.organise_data:
         DataOrganiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
             make_subfolders_val=get_bool(args.make_subfolders_val),
             make_subfolders_test=get_bool(args.make_subfolders_test))
 
     logging.info("Done")
 
+def str2bool(v):
+    """Boolean type for argparse"""
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp.gen\64_grm_my_dec_std_uni', nargs='?', help='Directory for data export.')
-    parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
-    parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
-    parser.add_argument('--smo_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames].')
-    parser.add_argument('--smo_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
-    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
+    parser.add_argument('--use_vis', type=str2bool, default='False', nargs='?', help='Enable visualization')
+    parser.add_argument('--use_gravity_removal', type=str2bool, default=True, help="Remove gravity during preprocessing?")
+    parser.add_argument('--use_smoothing', type=str2bool, default=False, help="Apply smoothing during preprocessing?")
+    parser.add_argument('--use_standardization', type=str2bool, default=True, help="Apply standardization during preprocessing?")
+    parser.add_argument('--smoothing_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smoothing_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
+    parser.add_argument('--smoothing_mode', type=str, choices=('medfilt', 'savgol_filter'), default='medfilt', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
-    parser.add_argument('--organise_data', type=str, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
+    parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
+    parser.add_argument('--organise_data', type=str2bool, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
     parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
-    parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
     args = parser.parse_args()
     main(args)
