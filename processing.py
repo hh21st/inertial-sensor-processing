@@ -14,6 +14,7 @@ from utils import *
 import matplotlib.pyplot as plt
 import oreba_dis
 import clemson
+import fic
 
 FIC_FREQUENCY = 64
 UPDATE_RATE = 16
@@ -130,10 +131,11 @@ def decimate(acc, gyro, timestamps, target_rate, original_rate):
     else:
         raise RuntimeError('Cannot decimate for this target rate')
 
-def resample(acc, gyro, target_rate, time_factor, total_time):
+def resample(acc, gyro, target_rate, time_factor, start_time, end_time):
     """Resample data using target frequency"""
     # Number of samples after resampling
     # Use nanoseconds during resampling
+    total_time = end_time - start_time
     calc_factor = FACTOR_NANOS / time_factor
     num = int(total_time / (1 / target_rate * time_factor))
     # Resample
@@ -141,7 +143,8 @@ def resample(acc, gyro, target_rate, time_factor, total_time):
     gyro = signal.resample(gyro, num)
     # Derive evenly spaced timestamps
     dt = time_factor / target_rate
-    timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
+    timestamps = np.arange(start_time*calc_factor,
+        (start_time+num*dt)*calc_factor, int(dt*calc_factor))
     timestamps = np.array(timestamps / calc_factor)
 
     return timestamps, acc, gyro
@@ -160,7 +163,9 @@ def main(args=None):
             args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
             args.exp_uniform, args.exp_format)
     elif args.dataset == "FIC":
-        dataset = fic.Dataset()
+        dataset = fic.Dataset(args.src_dir, args.exp_dir,
+            args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
+            args.exp_uniform, args.exp_format)
     elif args.dataset == "Clemson":
         dataset = clemson.Dataset(args.src_dir, args.exp_dir,
             args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
@@ -172,8 +177,8 @@ def main(args=None):
     ids = dataset.ids()
 
     # Iterate all ids
-    for id in ids:
-        id_s = '_'.join(id) if isinstance(id, tuple) else id
+    for i, id in enumerate(ids):
+        id_s = '_'.join([str(x) for x in id]) if isinstance(id, tuple) else id
         logging.info("Working on {}".format(id_s))
 
         if not dataset.check(id):
@@ -201,7 +206,7 @@ def main(args=None):
             #continue
 
         # Read timestamps and data
-        timestamps, data = dataset.data(id)
+        timestamps, data = dataset.data(i, id)
 
         # Dominant hand
         dominant_hand = dataset.dominant(id)
@@ -242,18 +247,19 @@ def main(args=None):
             else:
                 logging.info("Resample")
                 time_factor = dataset.get_time_factor()
-                total_time = timestamps[len(timestamps)-1] - timestamps[0]
+                start_time = timestamps[0]
+                end_time = timestamps[len(timestamps)-1]
                 if len(data) == 2:
                     left, right = data["left"], data["right"]
                     timestamps, left_acc, left_gyro = resample(left[0], left[1],
-                        args.sampling_rate, time_factor, total_time)
+                        args.sampling_rate, time_factor, start_time, end_time)
                     _, right_acc, right_gyro = resample(right[0], right[1],
-                        args.sampling_rate, time_factor, total_time)
+                        args.sampling_rate, time_factor, start_time, end_time)
                     data["left"] = (left_acc, left_gyro)
                     data["right"] = (right_acc, right_gyro)
                 else:
                     timestamps, acc, gyro = resample(data["hand"][0], data["hand"][1],
-                        args.sampling_rate, time_factor, total_time)
+                        args.sampling_rate, time_factor, start_time, end_time)
                     data["hand"] = (acc, gyro)
 
         # Processing
@@ -280,75 +286,17 @@ def main(args=None):
             data["hand"] = (acc, gyro)
 
         # Read annotations
-        labels = dataset.labels(id, timestamps)
+        labels = dataset.labels(i, id, timestamps)
 
         # Write data
         dataset.write(exp_path, id, timestamps, data, dominant_hand, labels)
 
     dataset.done()
-    logging.info("Done")
-
-def main1(args=None):
-    """Preprocess data for the selected dataset."""
-
-    if args.dataset == "FIC":
-        # For Food Intake Cycle (FIC) dataset
-        # Make sure pickle file exists
-        pickle_path = os.path.join(args.src_dir, "fic_pickle.pkl")
-        if not os.path.isfile(pickle_path):
-            raise RunimeError('Pickle file not found')
-        reader = FICReader()
-        data = reader.read_pickle(pickle_path)
-        for i in range(0, len(data['subject_id'])):
-            subject_id = data['subject_id'][i]
-            session_id = data['session_id'][i]
-            logging.info("Working on subject {}, session {}".format(subject_id, session_id))
-            # Make sure export dir exists
-            if not os.path.exists(args.exp_dir):
-                os.makedirs(args.exp_dir)
-            exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
-                "." + args.exp_format
-            exp_path = os.path.join(args.exp_dir, exp_file)
-            # Skip if export file already exists
-            if os.path.isfile(exp_path):
-                logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session_id))
-                continue
-            # Read acc and gyro
-            timestamps = data['signals'][i][:,0]
-            acc = data['signals'][i][:,1:4]
-            gyro = data['signals'][i][:,4:7]
-            annotations = data['bite_gt'][i]
-            label_1 = reader.get_labels(annotations, timestamps)
-            # Standardize data
-            acc = standardization(acc)
-            gyro = standardization(gyro)
-            # Write data
-            writer = FICWriter(exp_path)
-            writer.write(subject_id, session_id, timestamps, acc, gyro,
-                label_1, args.exp_format)
-
-    elif args.dataset == 'Experiment':
-        reader = ExperimentReader()
-        timestamps, left_acc, left_gyro, right_acc, right_gyro = \
-            reader.read_inert(args.src_dir, "Exp2", "02363", "02366")
-        left_acc, right_acc = np.array(left_acc), np.array(right_acc)
-        left_gyro, right_gyro = np.array(left_gyro), np.array(right_gyro)
-        right_acc, right_gyro = flip(right_acc, right_gyro)
-        #plt.plot(left_acc[:,2])
-        #plt.plot(right_acc[:,2])
-        plt.plot(left_gyro[:,2])
-        plt.plot(right_gyro[:,2])
-        plt.show()
-        exit()
-
-    else: raise RuntimeError('No valid reader selected')
 
     if args.organise_data:
         DataOrganiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
-            make_subfolders_val=get_bool(args.make_subfolders_val),
-            make_subfolders_test=get_bool(args.make_subfolders_test))
-
-    logging.info("Done")
+            make_subfolders_val=args.make_subfolders_val,
+            make_subfolders_test=args.make_subfolders_test)
 
 def str2bool(v):
     """Boolean type for argparse"""
@@ -380,9 +328,9 @@ if __name__ == '__main__':
     parser.add_argument('--label_spec', type=str, default='labels.xml', help='Filename of label specification')
     parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification, e.g., if Serve not included, always keep sublabels as Idle')
     parser.add_argument('--dom_hand_spec', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
-    parser.add_argument('--organise_data', type=str2bool, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
+    parser.add_argument('--organise_data', type=str2bool, default=False, nargs='?', help='Organise data in separate subfolders if true.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
-    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
-    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
+    parser.add_argument('--make_subfolders_val', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation set if true.')
+    parser.add_argument('--make_subfolders_test', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in test set if true.')
     args = parser.parse_args()
     main(args)

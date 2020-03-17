@@ -17,7 +17,6 @@ DEFAULT_LABEL = "Idle"
 FLIP_ACC = [-1., 1., 1.]
 FLIP_GYRO = [1., -1., -1.]
 TIME_FACTOR = 1000000
-DEFAULT_LABEL = "Idle"
 
 
 def _int64_feature(value):
@@ -47,9 +46,10 @@ class Dataset():
 
     def __class_names(self):
         """Get class names from label master file"""
-        assert os.path.isfile(self.label_spec), "Couldn't find label master file"
+        label_spec_path = os.path.join(self.src_dir, self.label_spec)
+        assert os.path.isfile(label_spec_path), "Couldn't find label master file"
         names_1 = []; names_2 = []; names_3 = []; names_4 = []
-        tree = etree.parse(self.label_spec)
+        tree = etree.parse(label_spec_path)
         categories = tree.getroot()
         for tag in categories[0]:
             names_1.append(tag.attrib['name'])
@@ -89,7 +89,7 @@ class Dataset():
             return False
         return True
 
-    def data(self, id):
+    def data(self, _, id):
         logging.info("Reading raw data from txt")
         # Read acc and gyro
         dir = os.path.join(self.src_dir, "all-data", id[0], id[1])
@@ -112,7 +112,18 @@ class Dataset():
         timestamps = range(0, len(acc)*dt, dt)
         return timestamps, {"hand": (acc, gyro)}
 
-    def labels(self, id, timestamps):
+    def dominant(self, id):
+        """Read handedness, which is the hand sensor was placed on"""
+        file_path = os.path.join(self.src_dir, "demographics.xlsx")
+        workbook = xlrd.open_workbook(file_path)
+        sheet = workbook.sheet_by_index(0)
+        for rowx in range(sheet.nrows):
+            cols = sheet.row_values(rowx)
+            if cols[0].lower() == id[0]:
+                return cols[4].lower()
+        return None
+
+    def labels(self, _, id, timestamps):
         def _index_to_ms(index):
             dt = TIME_FACTOR // FREQUENCY
             return index * dt
@@ -162,26 +173,6 @@ class Dataset():
 
         return (labels_1, labels_2, labels_3, labels_4)
 
-    def dominant(self, id):
-        """Read handedness, which is the hand sensor was placed on"""
-        file_path = os.path.join(self.src_dir, "demographics.xlsx")
-        workbook = xlrd.open_workbook(file_path)
-        sheet = workbook.sheet_by_index(0)
-        for rowx in range(sheet.nrows):
-            cols = sheet.row_values(rowx)
-            if cols[0].lower() == id[0]:
-                return cols[4].lower()
-        return None
-
-    def get_flip_signs(self):
-        return FLIP_ACC, FLIP_GYRO
-
-    def get_frequency(self):
-        return FREQUENCY
-
-    def get_time_factor(self):
-        return TIME_FACTOR
-
     def write(self, path, id, timestamps, data, dominant_hand, labels):
         frame_ids = range(0, len(timestamps))
         id = '_'.join(id)
@@ -216,3 +207,15 @@ class Dataset():
                         'example/label_4': _bytes_feature(labels[3][i].encode())
                     }))
                     tfrecord_writer.write(example.SerializeToString())
+
+    def done(self):
+        logging.info("Done")
+
+    def get_flip_signs(self):
+        return FLIP_ACC, FLIP_GYRO
+
+    def get_frequency(self):
+        return FREQUENCY
+
+    def get_time_factor(self):
+        return TIME_FACTOR

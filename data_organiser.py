@@ -39,6 +39,17 @@ class DataOrganiser:
         def get_subject_id(file_name):
             return file_name.split('_')[1]
 
+        def create_dir_if_required(dir):
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+
+        def copy_file(full_file_name, copy_to_dir):
+            create_dir_if_required(copy_to_dir)
+            if os.path.isfile(full_file_name):
+                shutil.copy(full_file_name, copy_to_dir)
+            else:
+                logging.error("file {0} does not exist.".format(full_file_name))
+
         def copy_file_and_log(full_file_name, copy_to_dir):
             if os.path.isfile(os.path.join(copy_to_dir, file_name)):
                 logging.info("file {0} already exists".format(os.path.join(copy_to_dir, file_name)))
@@ -74,14 +85,25 @@ class DataOrganiser:
 
 def main(args=None):
     DataOrganiser.organise(src_dir=args.src_dir, des_dir=args.des_dir,
-        make_subfolders_val=get_bool(args.make_subfolders_val),
-        make_subfolders_test=get_bool(args.make_subfolders_test))
+        make_subfolders_val=args.make_subfolders_val,
+        make_subfolders_test=args.make_subfolders_test)
+
+def str2bool(v):
+    """Boolean type for argparse"""
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='divides data into training, validation and test sets')
     parser.add_argument('--src_dir', type=str, default='', nargs='?', help='Directory to search for data.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets.')
-    parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
-    parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
+    parser.add_argument('--make_subfolders_val', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation set if true.')
+    parser.add_argument('--make_subfolders_test', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in test set if true.')
     args = parser.parse_args()
     main(args)

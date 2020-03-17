@@ -50,9 +50,10 @@ class Dataset():
 
     def __class_names(self):
         """Get class names from label master file"""
-        assert os.path.isfile(self.label_spec), "Couldn't find label master file"
+        label_spec_path = os.path.join(self.src_dir, self.label_spec)
+        assert os.path.isfile(label_spec_path), "Couldn't find label master file"
         names_1 = []; names_2 = []; names_3 = []; names_4 = []
-        tree = etree.parse(self.label_spec)
+        tree = etree.parse(label_spec_path)
         categories = tree.getroot()
         for tag in categories[0]:
             names_1.append(tag.attrib['name'])
@@ -72,7 +73,7 @@ class Dataset():
     def check(self, id):
         return id != "1074_1"
 
-    def data(self, id):
+    def data(self, _, id):
         logging.info("Reading raw data from Unisens")
         def _parse_j2py(jpype_x, jpype_y, jpype_z):
             """Convert from double[][] to list"""
@@ -114,7 +115,16 @@ class Dataset():
         return timestamps, {"left":  (left_acc, left_gyro), \
                             "right": (right_acc, right_gyro)}
 
-    def labels(self, id, timestamps):
+    def dominant(self, id):
+        file_full_name = os.path.join(self.src_dir, self.dom_hand_spec)
+        dom_hand_info = csv.reader(open(file_full_name, 'r'), delimiter=',')
+        next(dom_hand_info, None)
+        for row in dom_hand_info:
+            if id == row[0]:
+                return row[1].strip().lower()
+        return "NA"
+
+    def labels(self, _, id, timestamps):
         def _time_to_ms(time):
             t = dt.datetime.strptime(time, '%M:%S.%f')
             return t.minute * 60 * 1000 * 1000 + t.second * 1000 * 1000 \
@@ -145,24 +155,6 @@ class Dataset():
                 if row[7] in self.names_4:
                     labels_4[start_frame:end_frame] = row[7]
         return (labels_1, labels_2, labels_3, labels_4)
-
-    def dominant(self, id):
-        file_full_name = os.path.join(self.src_dir, self.dom_hand_spec)
-        dom_hand_info = csv.reader(open(file_full_name, 'r'), delimiter=',')
-        next(dom_hand_info, None)
-        for row in dom_hand_info:
-            if id == row[0]:
-                return row[1].strip().lower()
-        return None
-
-    def get_flip_signs(self):
-        return FLIP_ACC, FLIP_GYRO
-
-    def get_frequency(self):
-        return FREQUENCY
-
-    def get_time_factor(self):
-        return TIME_FACTOR
 
     def write(self, path, id, timestamps, data, dominant_hand, labels):
         frame_ids = range(0, len(timestamps))
@@ -243,3 +235,13 @@ class Dataset():
 
     def done(self):
         jpype.shutdownJVM()
+        logging.info("Done")
+
+    def get_flip_signs(self):
+        return FLIP_ACC, FLIP_GYRO
+
+    def get_frequency(self):
+        return FREQUENCY
+
+    def get_time_factor(self):
+        return TIME_FACTOR
