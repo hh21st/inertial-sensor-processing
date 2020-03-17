@@ -18,6 +18,9 @@ FLIP_ACC = [-1., 1., 1.]
 FLIP_GYRO = [1., -1., -1.]
 TIME_FACTOR = 1000000
 
+TRAIN_IDS = []
+VALID_IDS = []
+TEST_IDS = []
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -219,3 +222,12 @@ class Dataset():
 
     def get_time_factor(self):
         return TIME_FACTOR
+
+    def get_train_ids(self):
+        return TRAIN_IDS
+
+    def get_valid_ids(self):
+        return VALID_IDS
+
+    def get_test_ids(self):
+        return TEST_IDS
