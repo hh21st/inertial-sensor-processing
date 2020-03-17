@@ -10,18 +10,13 @@ from scipy import signal
 from math import radians, degrees
 import itertools
 from data_organiser import DataOrganiser
-from utils import *
 import matplotlib.pyplot as plt
 import oreba_dis
 import clemson
 import fic
 
-FIC_FREQUENCY = 64
 UPDATE_RATE = 16
-FACTOR_MILLIS = 1000
-FACTOR_MICROS = 1000000
 FACTOR_NANOS = 1000000000
-GRAVITY = 9.80665
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
@@ -193,7 +188,7 @@ def main(args=None):
                 ("_uni" if args.exp_uniform else "")
             exp_file = args.dataset + "_" + id_s + pp_s + "." + args.exp_format
         else:
-            exp_file = id_s + "_inertial." + args.exp_format
+            exp_file = args.dataset + "_" + id_s + "_inertial." + args.exp_format
 
         # Make exp_dir if it does not exist
         if not os.path.exists(args.exp_dir):
@@ -203,7 +198,7 @@ def main(args=None):
         exp_path = os.path.join(args.exp_dir, exp_file)
         if os.path.isfile(exp_path):
             logging.info("Dataset file already exists. Skipping {}.".format(id_s))
-            #continue
+            continue
 
         # Read timestamps and data
         timestamps, data = dataset.data(i, id)
@@ -291,12 +286,14 @@ def main(args=None):
         # Write data
         dataset.write(exp_path, id, timestamps, data, dominant_hand, labels)
 
-    dataset.done()
-
     if args.organise_data:
-        DataOrganiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
-            make_subfolders_val=args.make_subfolders_val,
-            make_subfolders_test=args.make_subfolders_test)
+        organiser = DataOrganiser(src_dir=args.exp_dir,
+            organise_dir=args.organise_dir,
+            organise_subfolders=args.organise_subfolders)
+        organiser.organise(train_ids=dataset.get_train_ids(),
+            valid_ids=dataset.get_valid_ids(), test_ids=dataset.get_test_ids())
+
+    dataset.done()
 
 def str2bool(v):
     """Boolean type for argparse"""
@@ -313,7 +310,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='OREBA', nargs='?', help='Directory to search for data.')
     parser.add_argument('--exp_dir', type=str, default='Export', nargs='?', help='Directory for data export.')
-    parser.add_argument('--dataset', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which dataset reader/writer to use')
+    parser.add_argument('--dataset', choices=('OREBA-DIS', 'Clemson', 'FIC'), default='OREBA', nargs='?', help='Which dataset reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--use_vis', type=str2bool, default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--use_gravity_removal', type=str2bool, default=True, help="Remove gravity during preprocessing?")
@@ -329,8 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification, e.g., if Serve not included, always keep sublabels as Idle')
     parser.add_argument('--dom_hand_spec', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
     parser.add_argument('--organise_data', type=str2bool, default=False, nargs='?', help='Organise data in separate subfolders if true.')
-    parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
-    parser.add_argument('--make_subfolders_val', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation set if true.')
-    parser.add_argument('--make_subfolders_test', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in test set if true.')
+    parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
+    parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set.')
     args = parser.parse_args()
     main(args)
