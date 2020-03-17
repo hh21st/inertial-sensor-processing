@@ -2,9 +2,6 @@ import numpy as np
 import quaternion
 from visualization import PygameViewer
 from fusion import MadgwickFusion
-from reader import OrebaReader, ClemsonReader, FICReader, ExperimentReader
-from writer import OrebaWriter, ClemsonWriter, FICWriter
-import csv
 import argparse
 import os
 import copy
@@ -15,12 +12,13 @@ import itertools
 from data_organiser import DataOrganiser
 from utils import *
 import matplotlib.pyplot as plt
+import oreba_dis
+import clemson
 
-OREBA_FREQUENCY = 64
-CLEMSON_FREQUENCY = 15
 FIC_FREQUENCY = 64
 UPDATE_RATE = 16
 FACTOR_MILLIS = 1000
+FACTOR_MICROS = 1000000
 FACTOR_NANOS = 1000000000
 GRAVITY = 9.80665
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
@@ -104,6 +102,7 @@ def preprocess(acc, gyro, sampling_rate, smoothing_mode, smoothing_window_size,
         acc = gravity_removal(acc, gyro, init_q, sampling_rate, 16, use_vis)
     # 2. Apply smoothing if enabled
     if use_smoothing:
+        logging.info("Smoothing")
         def _up_to_odd_integer(f):
             return int(np.ceil(f) // 2 * 2 + 1)
         acc = smoothing(acc, mode=smoothing_mode,
@@ -112,6 +111,7 @@ def preprocess(acc, gyro, sampling_rate, smoothing_mode, smoothing_window_size,
             size=_up_to_odd_integer(smo_window_size), order=smoothing_order)
     # 3, Apply standardization if enabled
     if use_standardization:
+        logging.info("Standardizing")
         acc = standardization(acc)
         gyro = standardization(gyro)
 
@@ -130,172 +130,168 @@ def decimate(acc, gyro, timestamps, target_rate, original_rate):
     else:
         raise RuntimeError('Cannot decimate for this target rate')
 
-def resample(acc, gyro, target_rate, units, total_time):
+def resample(acc, gyro, target_rate, time_factor, total_time):
     """Resample data using target frequency"""
     # Number of samples after resampling
-    if units == 'millis':
-        factor = FACTOR_MILLIS
-        calc_factor = 1000000
-    else:
-        factor = FACTOR_NANOS
-        calc_factor = 1
-    num = int(total_time / (1 / target_rate * factor))
+    # Use nanoseconds during resampling
+    calc_factor = FACTOR_NANOS / time_factor
+    num = int(total_time / (1 / target_rate * time_factor))
     # Resample
     acc = signal.resample(acc, num)
     gyro = signal.resample(gyro, num)
     # Derive evenly spaced timestamps
-    dt = factor / target_rate
+    dt = time_factor / target_rate
     timestamps = np.arange(0, num*dt*calc_factor, int(dt*calc_factor))
     timestamps = np.array(timestamps / calc_factor)
 
     return timestamps, acc, gyro
 
-def flip(acc, gyro):
+def flip(acc, gyro, acc_signs, gyro_signs):
     """Flip left to right hand or right hand to left hand - position 1"""
-    acc = np.multiply(acc, [1, -1, 1])
-    gyro = np.multiply(gyro, [-1, 1, -1])
-    return acc, gyro
-
-def flip2(acc, gyro):
-    """Flip left to right hand or right hand to left hand - position 2"""
-    acc = np.multiply(acc, [-1, 1, 1])
-    gyro = np.multiply(gyro, [1, -1, -1])
+    assert len(acc[0]) == 3 and len(gyro[0]) == 3, "Acc and Gyro must have 3 values"
+    acc = np.multiply(acc, acc_signs)
+    gyro = np.multiply(gyro, gyro_signs)
     return acc, gyro
 
 def main(args=None):
-    """Preprocess data for the selected database."""
+    # Identify dataset
+    if args.dataset == "OREBA":
+        dataset = oreba_dis.Dataset(args.src_dir, args.exp_dir,
+            args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
+            args.exp_uniform, args.exp_format)
+    elif args.dataset == "FIC":
+        dataset = fic.Dataset()
+    elif args.dataset == "Clemson":
+        dataset = clemson.Dataset(args.src_dir, args.exp_dir,
+            args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
+            args.exp_uniform, args.exp_format)
+    else:
+        raise ValueError("Dataset {} not implemented!".format(args.dataset))
 
-    if args.database == 'OREBA':
-        # For OREBA data
-        # Read subjects
-        subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
-        reader = OrebaReader()
-        for subject_id in subject_ids:
-            # skip over faulty data file (1074_1)
-            if subject_id == "1074_1":
-                continue
-            logging.info("Working on subject {}".format(subject_id))
-            if args.exp_mode == 'dev':
-                pp_s = "" +                                         \
-                    ("_grm") if args.use_gravity_removal else "" +  \
-                    ("_smo") if args.use_smoothing else "" +        \
-                    ("_std") if args.use_standardization else "" +  \
-                    ("_uni" if args.exp_uniform else "")
-                exp_file = "OREBA_" + subject_id + pp_s + "." + args.exp_format
-            else:
-                exp_file = subject_id + "_inertial." + args.exp_format
-            if args.exp_dir == args.src_dir:
-                exp_path = os.path.join(args.exp_dir, subject_id, exp_file)
-            else:
-                if not os.path.exists(args.exp_dir):
-                    os.makedirs(args.exp_dir)
-                exp_path = os.path.join(args.exp_dir, exp_file)
-            if os.path.isfile(exp_path):
-                logging.info("Dataset file already exists. Skipping {0}.".format(subject_id))
-                continue
-            # Read acc and gyro
-            logging.info("Reading raw data from Unisens")
-            timestamps, left_acc, left_gyro, right_acc, right_gyro = \
-                reader.read_inert(args.src_dir, subject_id)
-            # Make hands uniform by flipping left to right if needed
-            dominant_hand = reader.read_dominant(args.src_dir, subject_id, args.dom_hand_info_file_name)
-            if args.exp_uniform == 'True' and dominant_hand == 'left':
-                right_acc_temp = copy.deepcopy(right_acc)
-                right_gyro_temp = copy.deepcopy(right_gyro)
-                right_acc, right_gyro = flip(left_acc, left_gyro)
-                left_acc, left_gyro = flip(right_acc_temp, right_gyro_temp)
-            # Resample
-            timestamps, left_acc, left_gyro = decimate(left_acc, left_gyro,
-                timestamps, args.sampling_rate, OREBA_FREQUENCY)
-            _, right_acc, right_gyro = decimate(right_acc, right_gyro,
-                timestamps, args.sampling_rate, OREBA_FREQUENCY)
-            # Preprocessing
-            left_acc_0, left_gyro_0 = preprocess(left_acc, left_gyro,
-                args.sampling_rate, args.smoothing_mode,
-                args.smoothing_window_size, args.smoothing_order,
-                args.use_vis, args.use_gravity_removal, args.use_smoothing,
-                args.use_standardization)
-            right_acc_0, right_gyro_0 = preprocess(right_acc, right_gyro,
-                args.sampling_rate, args.smoothing_mode,
-                args.smoothing_window_size, args.smoothing_order,
-                args.use_vis, args.use_gravity_removal, args.use_smoothing,
-                args.use_standardization)
-            # Read annotations
-            annotations = reader.read_annotations(args.src_dir, subject_id)
-            label_1, label_2, label_3, label_4 = reader.get_labels(annotations, timestamps)
-            # Write csv
-            writer = OrebaWriter(exp_path)
-            writer.write(subject_id, timestamps, left_acc_0, left_gyro_0,
-                right_acc_0, right_gyro_0, dominant_hand,
-                label_1, label_2, label_3, label_4, args.exp_uniform,
-                args.exp_format)
-        reader.done()
+    # Session ids
+    ids = dataset.ids()
 
-    elif args.database == 'Clemson':
-        # For Clemson Cafeteria data
-        # Read subjects
-        data_dir = os.path.join(args.src_dir, "all-data")
-        subject_ids = [x for x in next(os.walk(data_dir))[1]]
-        reader = ClemsonReader()
-        for subject_id in subject_ids:
-            subject_dir = os.path.join(data_dir, subject_id)
-            hand = reader.read_hand(args.src_dir, subject_id)
-            sessions = [x for x in next(os.walk(subject_dir))[1]]
-            for session in sessions:
-                logging.info("Working on subject {}, session {}".format(subject_id, session))
-                # Make sure export dir exists
-                if not os.path.exists(args.exp_dir):
-                    os.makedirs(args.exp_dir)
-                # Make filename
-                if args.exp_mode == 'dev':
-                    pp_s = "" +                                             \
-                        ("_grm") if args.use_gravity_removal else "" +      \
-                        ("_smo") if args.use_smoothing else "" +            \
-                        ("_std") if args.use_standardization else "" +      \
-                        ("_uni" if args.exp_uniform else "")
-                    exp_file = "Clemson_" + subject_id + "_" + session +    \
-                        pp_s + "." + args.exp_format
+    # Iterate all ids
+    for id in ids:
+        id_s = '_'.join(id) if isinstance(id, tuple) else id
+        logging.info("Working on {}".format(id_s))
+
+        if not dataset.check(id):
+            continue
+
+        # Output filename
+        if args.exp_mode == 'dev':
+            pp_s = "" +                                             \
+                ("_grm" if args.use_gravity_removal else "") +      \
+                ("_smo" if args.use_smoothing else "") +            \
+                ("_std" if args.use_standardization else "") +      \
+                ("_uni" if args.exp_uniform else "")
+            exp_file = args.dataset + "_" + id_s + pp_s + "." + args.exp_format
+        else:
+            exp_file = id_s + "_inertial." + args.exp_format
+
+        # Make exp_dir if it does not exist
+        if not os.path.exists(args.exp_dir):
+            os.makedirs(args.exp_dir)
+
+        # Export path
+        exp_path = os.path.join(args.exp_dir, exp_file)
+        if os.path.isfile(exp_path):
+            logging.info("Dataset file already exists. Skipping {}.".format(id_s))
+            #continue
+
+        # Read timestamps and data
+        timestamps, data = dataset.data(id)
+
+        # Dominant hand
+        dominant_hand = dataset.dominant(id)
+
+        # If enabled, make hands uniform by flipping left to right if needed
+        if args.exp_uniform and dominant_hand == 'left':
+            logging.info("Flipping for uniformity")
+            acc_signs, gyro_signs = dataset.get_flip_signs()
+            if len(data) == 2:
+                left, right = data["left"], data["right"]
+                left_temp = (copy.deepcopy(left[0]), copy.deepcopy(left[1]))
+                left = flip(right[0], right[1], acc_signs, gyro_signs)
+                right = flip(left_temp[0], left_temp[1], acc_signs, gyro_signs)
+                data["left"], data["right"] = left, right
+            else:
+                data["hand"] = (flip(data["hand"][0], data["hand"][1],
+                    acc_signs, gyro_signs))
+
+        # Decimate/resample if needed
+        dataset_frequency = dataset.get_frequency()
+        assert args.sampling_rate <= dataset_frequency, \
+            "Desired sampling frequency cannot be higher than dataset frequency"
+        if args.sampling_rate < dataset_frequency:
+            if dataset_frequency % args.sampling_rate == 0:
+                logging.info("Decimate")
+                if len(data) == 2:
+                    left, right = data["left"], data["right"]
+                    timestamps, left_acc, left_gyro = decimate(left[0], left[1],
+                        timestamps, args.sampling_rate, dataset_frequency)
+                    _, right_acc, right_gyro = decimate(right[0], right[1],
+                        timestamps, args.sampling_rate, dataset_frequency)
+                    data["left"] = (left_acc, left_gyro)
+                    data["right"] = (right_acc, right_gyro)
                 else:
-                    exp_file = subject_id + "_" + session + "." + args.exp_format
-                exp_path = os.path.join(args.exp_dir, exp_file)
-                # Skip if export file already exists
-                if os.path.isfile(exp_path):
-                    logging.info("Dataset file already exists. Skipping {}_{}.".format(subject_id, session))
-                    continue
-                # Path of gesture annotations
-                gesture_dir = os.path.join(args.src_dir, "all-gt-gestures", subject_id,
-                    session, "gesture_union.txt")
-                if not os.path.isfile(gesture_dir):
-                    logging.warn("No gesture annotations found. Skipping {}_{}.".format(
-                        subject_id, session))
-                    continue
-                # Path of bite annotations
-                bite_dir = os.path.join(args.src_dir, "all-gt-bites", subject_id,
-                    session, "gt_union.txt")
-                if not os.path.isfile(bite_dir):
-                    logging.warn("No bite annotations found. Skipping {}_{}.".format(
-                        subject_id, session))
-                    continue
-                # Read acc and gyro
-                timestamps, acc, gyro = reader.read_inert(data_dir, subject_id, session)
-                # Make hands uniform by flipping left to right if needed
-                if args.exp_uniform == "True" and hand == 'left':
-                    acc, gyro = flip(acc, gyro)
-                # Preprocessing
-                acc_0, gyro_0 = preprocess(acc, gyro, args.sampling_rate,
-                    args.smoothing_mode, args.smoothing_window_size,
-                    args.smoothing_order, args.use_vis, args.use_gravity_removal,
-                    args.use_smoothing, args.use_standardization)
-                # Read annotations
-                annotations = reader.read_annotations(gesture_dir, bite_dir)
-                label_1, label_2, label_3, label_4, label_5 = reader.get_labels(annotations, timestamps)
-                # Write csv
-                writer = ClemsonWriter(exp_path)
-                writer.write(subject_id, session, timestamps, acc_0,
-                    gyro_0, hand, label_1, label_2, label_3, label_4,
-                    label_5, args.exp_format)
+                    timestamps, acc, gyro = decimate(data[0], right[1],
+                        timestamps, args.sampling_rate, dataset_frequency)
+                    data["hand"] = (acc, gyro)
+            else:
+                logging.info("Resample")
+                time_factor = dataset.get_time_factor()
+                total_time = timestamps[len(timestamps)-1] - timestamps[0]
+                if len(data) == 2:
+                    left, right = data["left"], data["right"]
+                    timestamps, left_acc, left_gyro = resample(left[0], left[1],
+                        args.sampling_rate, time_factor, total_time)
+                    _, right_acc, right_gyro = resample(right[0], right[1],
+                        args.sampling_rate, time_factor, total_time)
+                    data["left"] = (left_acc, left_gyro)
+                    data["right"] = (right_acc, right_gyro)
+                else:
+                    timestamps, acc, gyro = resample(data["hand"][0], data["hand"][1],
+                        args.sampling_rate, time_factor, total_time)
+                    data["hand"] = (acc, gyro)
 
-    elif args.database == "FIC":
+        # Processing
+        if len(data) == 2:
+            left, right = data["left"], data["right"]
+            left_acc, left_gyro = preprocess(left[0], left[1],
+                args.sampling_rate, args.smoothing_mode,
+                args.smoothing_window_size, args.smoothing_order,
+                args.use_vis, args.use_gravity_removal, args.use_smoothing,
+                args.use_standardization)
+            right_acc, right_gyro = preprocess(right[0], right[1],
+                args.sampling_rate, args.smoothing_mode,
+                args.smoothing_window_size, args.smoothing_order,
+                args.use_vis, args.use_gravity_removal, args.use_smoothing,
+                args.use_standardization)
+            data["left"] = (left_acc, left_gyro)
+            data["right"] = (right_acc, right_gyro)
+        else:
+            acc, gyro = preprocess(data["hand"][0], data["hand"][1],
+                args.sampling_rate, args.smoothing_mode,
+                args.smoothing_window_size, args.smoothing_order, args.use_vis,
+                args.use_gravity_removal, args.use_smoothing,
+                args.use_standardization)
+            data["hand"] = (acc, gyro)
+
+        # Read annotations
+        labels = dataset.labels(id, timestamps)
+
+        # Write data
+        dataset.write(exp_path, id, timestamps, data, dominant_hand, labels)
+
+    dataset.done()
+    logging.info("Done")
+
+def main1(args=None):
+    """Preprocess data for the selected dataset."""
+
+    if args.dataset == "FIC":
         # For Food Intake Cycle (FIC) dataset
         # Make sure pickle file exists
         pickle_path = os.path.join(args.src_dir, "fic_pickle.pkl")
@@ -331,7 +327,7 @@ def main(args=None):
             writer.write(subject_id, session_id, timestamps, acc, gyro,
                 label_1, args.exp_format)
 
-    elif args.database == 'Experiment':
+    elif args.dataset == 'Experiment':
         reader = ExperimentReader()
         timestamps, left_acc, left_gyro, right_acc, right_gyro = \
             reader.read_inert(args.src_dir, "Exp2", "02363", "02366")
@@ -367,9 +363,9 @@ def str2bool(v):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
-    parser.add_argument('--src_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp', nargs='?', help='Directory to search for data.')
-    parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp.gen\64_grm_my_dec_std_uni', nargs='?', help='Directory for data export.')
-    parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which database reader/writer to use')
+    parser.add_argument('--src_dir', type=str, default='OREBA', nargs='?', help='Directory to search for data.')
+    parser.add_argument('--exp_dir', type=str, default='Export', nargs='?', help='Directory for data export.')
+    parser.add_argument('--dataset', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which dataset reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--use_vis', type=str2bool, default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--use_gravity_removal', type=str2bool, default=True, help="Remove gravity during preprocessing?")
@@ -379,12 +375,14 @@ if __name__ == '__main__':
     parser.add_argument('--smoothing_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
     parser.add_argument('--smoothing_mode', type=str, choices=('medfilt', 'savgol_filter'), default='medfilt', nargs='?', help='smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
-    parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
+    parser.add_argument('--exp_uniform', type=str2bool, default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
+    parser.add_argument('--label_spec', type=str, default='labels.xml', help='Filename of label specification')
+    parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification, e.g., if Serve not included, always keep sublabels as Idle')
+    parser.add_argument('--dom_hand_spec', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
     parser.add_argument('--organise_data', type=str2bool, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
-    parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
     args = parser.parse_args()
     main(args)
