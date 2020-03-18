@@ -83,6 +83,10 @@ class Dataset():
         timestamps = [_format_time(t) for t in timestamps]
         acc = data["hand"][0]
         gyro = data["hand"][1]
+        assert len(timestamps) == len(acc), \
+            "Number timestamps and acc readings must be equal"
+        assert len(timestamps) == len(gyro), \
+            "Number timestamps and acc readings must be equal"
         if self.exp_format == 'csv':
             with open(path, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')

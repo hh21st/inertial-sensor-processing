@@ -178,6 +178,14 @@ class Dataset():
         right_gyro = data["right"][1]
         left_acc = data["left"][0]
         left_gyro = data["left"][1]
+        assert len(timestamps) == len(right_acc), \
+            "Number timestamps and acc readings must be equal"
+        assert len(timestamps) == len(left_acc), \
+            "Number timestamps and acc readings must be equal"
+        assert len(timestamps) == len(right_gyro), \
+            "Number timestamps and acc readings must be equal"
+        assert len(timestamps) == len(left_gyro), \
+            "Number timestamps and acc readings must be equal"
         if self.exp_format == 'csv':
             with open(path, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
