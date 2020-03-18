@@ -2,18 +2,35 @@ import argparse
 import os
 import shutil
 import logging
+import oreba_dis
+import fic
+import clemson
 
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
     datefmt='%H:%M:%S', level=logging.INFO)
 
 class DataOrganiser:
 
-    def __init__(self, src_dir, organise_dir, organise_subfolders):
+    def __init__(self, src_dir, organise_dir, dataset, organise_subfolders):
         self.src_dir = src_dir
+        self.dataset = dataset
         self.organise_dir = organise_dir
         self.organise_subfolders = organise_subfolders
 
-    def organise(self, train_ids, valid_ids, test_ids):
+    def organise(self):
+
+        if self.dataset == "OREBA-DIS":
+            train_ids = oreba_dis.TRAIN_IDS
+            valid_ids = oreba_dis.VALID_IDS
+            test_ids = oreba_dis.TEST_IDS
+        elif self.dataset == "FIC":
+            train_ids = fic.TRAIN_IDS
+            valid_ids = fic.VALID_IDS
+            test_ids = fic.TEST_IDS
+        elif self.dataset == "Clemson":
+            train_ids = clemson.TRAIN_IDS
+            valid_ids = clemson.VALID_IDS
+            test_ids = clemson.TEST_IDS
 
         train_dir = os.path.join(self.organise_dir, "train")
         valid_dir = os.path.join(self.organise_dir, "valid")
@@ -56,3 +73,29 @@ class DataOrganiser:
                 copy_to_dir(file, self.src_dir, subdir)
 
         logging.info("Done organising")
+
+def main(args=None):
+    organiser = DataOrganiser(src_dir=args.src_dir,
+        organise_dir=args.organise_dir, dataset=args.dataset,
+        organise_subfolders=args.organise_subfolders)
+    organiser.organise()
+
+def str2bool(v):
+    """Boolean type for argparse"""
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Organise exported files')
+    parser.add_argument('--src_dir', type=str, default='OREBA-DIS', nargs='?', help='Directory to search for data')
+    parser.add_argument('--dataset', choices=('OREBA-DIS', 'Clemson', 'FIC'), default='OREBA-DIS', nargs='?', help='Which dataset is used')
+    parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser')
+    parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set')
+    args = parser.parse_args()
+    main(args)

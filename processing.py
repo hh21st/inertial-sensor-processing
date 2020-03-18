@@ -288,10 +288,9 @@ def main(args=None):
 
     if args.organise_data:
         organiser = DataOrganiser(src_dir=args.exp_dir,
-            organise_dir=args.organise_dir,
+            organise_dir=args.organise_dir, dataset=args.dataset,
             organise_subfolders=args.organise_subfolders)
-        organiser.organise(train_ids=dataset.get_train_ids(),
-            valid_ids=dataset.get_valid_ids(), test_ids=dataset.get_test_ids())
+        organiser.organise()
 
     dataset.done()
 
