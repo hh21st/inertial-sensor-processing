@@ -219,7 +219,7 @@ class Dataset():
                             right_gyro[i][0], right_gyro[i][1], right_gyro[i][2],
                             dominant_hand, labels[0][i], labels[1][i],
                             labels[2][i], labels[3][i]])
-        elif exp_format == 'tfrecord':
+        elif self.exp_format == 'tfrecord':
             with tf.io.TFRecordWriter(path) as tfrecord_writer:
                 for i in range(0, len(timestamps)):
                     if self.exp_uniform:
