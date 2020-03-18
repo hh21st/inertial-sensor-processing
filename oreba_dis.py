@@ -54,8 +54,8 @@ class Dataset():
         self.exp_uniform = exp_uniform
         self.exp_format = exp_format
         # Init jpype
-        jpype.addClassPath('org.unisens.jar')
-        jpype.addClassPath('org.unisens.ri.jar')
+        jpype.addClassPath('unisens/org.unisens.jar')
+        jpype.addClassPath('unisens/org.unisens.ri.jar')
         jpype.startJVM()
         # Class names
         self.names_1, self.names_2, self.names_3, self.names_4 = \
