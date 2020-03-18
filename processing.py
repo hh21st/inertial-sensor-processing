@@ -153,7 +153,7 @@ def flip(acc, gyro, acc_signs, gyro_signs):
 
 def main(args=None):
     # Identify dataset
-    if args.dataset == "OREBA":
+    if args.dataset == "OREBA-DIS":
         dataset = oreba_dis.Dataset(args.src_dir, args.exp_dir,
             args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
             args.exp_uniform, args.exp_format)
