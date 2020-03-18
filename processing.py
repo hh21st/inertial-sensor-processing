@@ -139,7 +139,7 @@ def resample(acc, gyro, target_rate, time_factor, start_time, end_time):
     # Derive evenly spaced timestamps
     dt = time_factor / target_rate
     timestamps = np.arange(start_time*calc_factor,
-        (start_time+num*dt)*calc_factor, int(dt*calc_factor))
+        (start_time+(num-1)*dt)*calc_factor, int(dt*calc_factor))
     timestamps = np.array(timestamps / calc_factor)
 
     return timestamps, acc, gyro
@@ -326,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification for sublabels (if label not included, always keep sublabels as Idle)')
     parser.add_argument('--dom_hand_spec', type=str, default='most_used_hand.csv' , nargs='?', help='Filename containing the dominant hand info')
     parser.add_argument('--organise_data', type=str2bool, default=False, nargs='?', help='If True, organise data in train, valid, test subfolders')
-    parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
-    parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set.')
+    parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser')
+    parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set')
     args = parser.parse_args()
     main(args)
