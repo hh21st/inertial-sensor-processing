@@ -151,6 +151,35 @@ def flip(acc, gyro, acc_signs, gyro_signs):
     gyro = np.multiply(gyro, gyro_signs)
     return acc, gyro
 
+def plot(acc, gyro, label, timestamps):
+    # Data
+    acc = np.asarray(acc)
+    gyro = np.asarray(gyro)
+    if label is not None:
+        label_1 = [0 if x=="Idle" else 5 for x in label]
+
+    # Accelerometer
+    plt.figure(1)
+    plt.plot(timestamps, acc[:,0])
+    plt.plot(timestamps, acc[:,1])
+    plt.plot(timestamps, acc[:,2])
+    if label is not None:
+        plt.plot(timestamps, label_1)
+    plt.xlabel("Time")
+    plt.ylabel("Accelerometer")
+
+    # Gyroscope
+    fig2 = plt.figure()
+    plt.plot(timestamps, gyro[:,0])
+    plt.plot(timestamps, gyro[:,1])
+    plt.plot(timestamps, gyro[:,2])
+    if label is not None:
+        plt.plot(timestamps, label_1)
+    plt.xlabel("Time")
+    plt.ylabel("Gyroscope")
+
+    plt.show()
+
 def main(args=None):
     # Identify dataset
     if args.dataset == "OREBA-DIS":
