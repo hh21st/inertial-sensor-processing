@@ -207,8 +207,8 @@ class Dataset():
         def _format_time(t):
             return (dt.datetime.min + dt.timedelta(microseconds=t)).time().strftime('%H:%M:%S.%f')
         timestamps = [_format_time(t) for t in timestamps]
-        acc = data["hand"][0]
-        gyro = data["hand"][1]
+        acc = np.asarray(data["hand"][0])
+        gyro = np.asarray(data["hand"][1])
         assert len(timestamps) == len(acc), \
             "Number timestamps and acc readings must be equal"
         assert len(timestamps) == len(gyro), \

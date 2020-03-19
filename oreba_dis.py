@@ -174,10 +174,10 @@ class Dataset():
         def _format_time(t):
             return (dt.datetime.min + dt.timedelta(microseconds=t)).time().strftime('%H:%M:%S.%f')
         timestamps = [_format_time(t) for t in timestamps]
-        right_acc = data["right"][0]
-        right_gyro = data["right"][1]
-        left_acc = data["left"][0]
-        left_gyro = data["left"][1]
+        right_acc = np.asarray(data["right"][0])
+        right_gyro = np.asarray(data["right"][1])
+        left_acc = np.asarray(data["left"][0])
+        left_gyro = np.asarray(data["left"][1])
         assert len(timestamps) == len(right_acc), \
             "Number timestamps and acc readings must be equal"
         assert len(timestamps) == len(left_acc), \
