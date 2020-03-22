@@ -74,13 +74,14 @@ def standardization(x):
 def smoothing(x, mode, size, order):
     if size < 3 or size <= order:
         RuntimeError('Smoothing size {0} is too small.'.format(size))
-        #return x;
-    #if size <= order:
-    #    order = size - 1
     if mode == 'savgol_filter':
         return signal.savgol_filter(x, size, order, axis=0)
     elif mode == 'medfilt':
         return signal.medfilt(x, size)
+    elif mode == 'moving_average':
+        def moving_average(x, size=size):
+            return np.convolve(x, np.ones(size), 'valid') / size
+        return np.apply_along_axis(moving_average, 1, x, size)
     else:
         raise RuntimeError('Smoothing mode {0} is not supported.'.format(mode))
 
@@ -102,9 +103,9 @@ def preprocess(acc, gyro, sampling_rate, smoothing_mode, smoothing_window_size,
         def _up_to_odd_integer(f):
             return int(np.ceil(f) // 2 * 2 + 1)
         acc = smoothing(acc, mode=smoothing_mode,
-            size=_up_to_odd_integer(smo_window_size), order=smoothing_order)
+            size=_up_to_odd_integer(smoothing_window_size), order=smoothing_order)
         gyro = smoothing(gyro, mode=smoothing_mode,
-            size=_up_to_odd_integer(smo_window_size), order=smoothing_order)
+            size=_up_to_odd_integer(smoothing_window_size), order=smoothing_order)
     # 3, Apply standardization if enabled
     if use_standardization:
         logging.info("Standardizing")
@@ -346,7 +347,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_standardization', type=str2bool, default=True, help="If True, apply standardization during preprocessing")
     parser.add_argument('--smoothing_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames]')
     parser.add_argument('--smoothing_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
-    parser.add_argument('--smoothing_mode', type=str, choices=('medfilt', 'savgol_filter'), default='medfilt', nargs='?', help='Smoothing mode')
+    parser.add_argument('--smoothing_mode', type=str, choices=('medfilt', 'savgol_filter', 'moving_average'), default='moving_average', nargs='?', help='Smoothing mode')
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str2bool, default=True, nargs='?', help='Convert all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
