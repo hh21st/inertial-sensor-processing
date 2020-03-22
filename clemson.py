@@ -126,15 +126,30 @@ class Dataset():
         acc = []
         gyro = []
         with open(files[0]) as dest_f:
+            # Read voltage values
+            v_acc_x = []; v_acc_y = []; v_acc_z = []
+            v_gyro_x = []; v_gyro_y = []; v_gyro_z = []
             for row in csv.reader(dest_f, delimiter='\t'):
-                acc_x = (float(row[0]) - 1.65) * 1000.0 / ACC_SENSITIVITY
-                acc_y = (float(row[1]) - 1.65) * 1000.0 / ACC_SENSITIVITY
-                acc_z = (float(row[2]) - 1.65) * 1000.0 / ACC_SENSITIVITY
+                v_acc_x.append(float(row[0]))
+                v_acc_y.append(float(row[1]))
+                v_acc_z.append(float(row[2]))
+                v_gyro_x.append(float(row[3]))
+                v_gyro_y.append(float(row[4]))
+                v_gyro_z.append(float(row[5]))
+            # Calculate voltage averages for gyroscope
+            v_gyro_x_avg = np.average(v_gyro_x)
+            v_gyro_y_avg = np.average(v_gyro_y)
+            v_gyro_z_avg = np.average(v_gyro_z)
+            # Derive acceleration in g and rotational velocity in deg/s
+            for i, vals in enumerate(zip(
+                v_acc_x, v_acc_y, v_acc_z, v_gyro_x, v_gyro_y, v_gyro_z)):
+                acc_x = (vals[0] - 1.65) * 1000.0 / ACC_SENSITIVITY
+                acc_y = (vals[1] - 1.65) * 1000.0 / ACC_SENSITIVITY
+                acc_z = (vals[2] - 1.65) * 1000.0 / ACC_SENSITIVITY
                 acc.append([acc_x, acc_y, acc_z])
-                # Todo estimate zero rate output mean instead of simply using 1.25!
-                gyro_x = (float(row[3])-1.25) * 1000.0 / GYRO_SENSITIVITY
-                gyro_y = (float(row[4])-1.25) * 1000.0 / GYRO_SENSITIVITY
-                gyro_z = (float(row[5])-1.25) * 1000.0 / GYRO_SENSITIVITY
+                gyro_x = (vals[3] - v_gyro_x_avg) * 1000.0 / GYRO_SENSITIVITY
+                gyro_y = (vals[4] - v_gyro_y_avg) * 1000.0 / GYRO_SENSITIVITY
+                gyro_z = (vals[5] - v_gyro_z_avg) * 1000.0 / GYRO_SENSITIVITY
                 gyro.append([gyro_x, gyro_y, gyro_z])
         dt = TIME_FACTOR // FREQUENCY # In microseconds
         timestamps = range(0, len(acc)*dt, dt)
