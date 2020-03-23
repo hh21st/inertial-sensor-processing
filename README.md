@@ -41,7 +41,7 @@ The following flags can be used to specify the settings:
 | --use_standardization | If True, apply standardization during preprocessing | True |
 | --smoothing_window_size | Size of the smoothing window [number of frames] | 1 |
 | --smoothing_order | The polynomial used in Savgol filter | 1 |
-| --smoothing_mode | Smoothing mode {medfilt, savgol_filter} | medfilt |
+| --smoothing_mode | Smoothing mode {medfilt, savgol_filter, moving_average} | moving_average |
 | --exp_mode | Write file for publication or development {pub, dev} | dev |
 | --exp_uniform | Convert all dominant hands to right and all non-dominant hands to left | True |
 | --exp_format | Format for export {csv, tfrecord} | csv |
