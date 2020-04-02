@@ -15,6 +15,10 @@ import itertools
 from data_organiser import DataOrganiser
 from utils import *
 import matplotlib.pyplot as plt
+#########
+import smooth_moving_average
+import median_filter
+#########
 
 OREBA_FREQUENCY = 64
 CLEMSON_FREQUENCY = 15
@@ -77,6 +81,8 @@ def standardize(x):
     np_x /= np.std(np_x, axis=0)
     return list(np_x)
 
+#########
+
 def smoothe(x, smooth_mode, size, order):
     if(smooth_mode != 'decimate' and size < 3):
         return x;
@@ -85,24 +91,45 @@ def smoothe(x, smooth_mode, size, order):
     if smooth_mode=='savgol_filter':
         return signal.savgol_filter(x, size, order, axis=0)
     elif smooth_mode=='medfilt':
-        return signal.medfilt(x, size)
-    elif smooth_mode=='decimate':
-        return anti_alias(x)
+        return median_filter.smooth(x, size)
+    elif smooth_mode=='moving_average':
+        return smooth_moving_average.smooth(x, size, True)
     elif smooth_mode=='none':
         return x
     else:
         raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
 
-def anti_alias(x):
-    """
-    Applys an anti-aliasing filter.
-    An order 8 Chebyshev type I filter is used.
-    """
-    x = np.asarray(x)
-    system = signal.ltisys.dlti(*signal.cheby1(8, 0.05, 0.8))
-    b, a = system.num, system.den
-    a = np.asarray(a)
-    return signal.filtfilt(b, a, x, 0)
+#########
+
+#def smoothe(x, smooth_mode, size, order):
+#    if(smooth_mode != 'decimate' and size < 3):
+#        return x;
+#    if size <= order:
+#        order = size - 1
+#    if smooth_mode=='savgol_filter':
+#        return signal.savgol_filter(x, size, order, axis=0)
+#    elif smooth_mode=='medfilt':
+#        return signal.medfilt(x, size)
+#    elif smooth_mode=='moving_average':
+#        return smooth_moving_average.smooth(x, size, True)
+#    elif smooth_mode=='decimate':
+#        return anti_alias(x)
+#    elif smooth_mode=='none':
+#        return x
+#    else:
+#        raise RuntimeError('Smoothing mode {0} is not supported.'.format(smooth_mode))
+
+#def anti_alias(x):
+#    """
+#    Applys an anti-aliasing filter.
+#    An order 8 Chebyshev type I filter is used.
+#    """
+#    x = np.asarray(x)
+#    system = signal.ltisys.dlti(*signal.cheby1(8, 0.05, 0.8))
+#    b, a = system.num, system.den
+#    a = np.asarray(a)
+#    return signal.filtfilt(b, a, x, 0)
+#########
 
 def preprocess(acc, gyro, sampling_rate, smooth_mode, smo_window_size, smo_order, mode, vis):
     """Preprocess the data"""
@@ -190,8 +217,11 @@ def main(args=None):
                 continue
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
+#########
                 exp_file = "OREBA_" + subject_id + "_" + \
-                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + "." + args.exp_format
+                    str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform == 'True' else "") + "." + args.exp_format
+                    #str(args.sampling_rate) + "_" + args.preprocess + ("_uni" if args.exp_uniform else "") + "." + args.exp_format
+#########
             else:
                 exp_file = subject_id + "_inertial_raw." + args.exp_format
             if args.exp_dir == args.src_dir:
@@ -252,7 +282,7 @@ def main(args=None):
                     os.makedirs(args.exp_dir)
                 if args.exp_mode == 'dev':
                     exp_file = "Clemson_" + subject_id + "_" + session + \
-                        "_15_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
+                        "_15_" + args.preprocess  + ("_uni" if args.exp_uniform == 'True' else "") + ".csv"
                 else:
                     exp_file = subject_id + "_" + session + ".csv"
                 exp_path = os.path.join(args.exp_dir, exp_file)
@@ -309,7 +339,7 @@ def main(args=None):
                 os.makedirs(args.exp_dir)
             if args.exp_mode == 'dev':
                 exp_file = "FIC_" + str(subject_id) + "_" + str(session_id) + \
-                    "_" + str(args.sampling_rate) + "_" + args.preprocess  + ("_uni" if args.exp_uniform else "") + ".csv"
+                    "_" + str(args.sampling_rate) + "_" + args.preprocess  + ("_uni" if args.exp_uniform == 'True' else "") + ".csv"
             else:
                 exp_file = str(subject_id) + "_" + str(session_id) + ".csv"
             exp_path = os.path.join(args.exp_dir, exp_file)
@@ -372,15 +402,18 @@ def main(args=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
-    parser.add_argument('--src_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp', nargs='?', help='Directory to search for data.')
-    parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\temp.gen\64_grm_my_dec_std_uni', nargs='?', help='Directory for data export.')
+    parser.add_argument('--src_dir', type=str, default=r'\\uncle.newcastle.edu.au\entities\research\oreba\OREBA\Phase 1\Synchronised', nargs='?', help='Directory to search for data.')
+    parser.add_argument('--exp_dir', type=str, default=r'C:\H\PhD\ORIBA\Model\FileGen\OREBA\64_grm_med_std_uni_', nargs='?', help='Directory for data export.')
     parser.add_argument('--vis', choices=('True','False'), default='False', nargs='?', help='Enable visualization')
     parser.add_argument('--database', choices=('OREBA', 'Clemson', 'FIC', 'Experiment'), default='OREBA', nargs='?', help='Which database reader/writer to use')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals.')
     parser.add_argument('--preprocess', type=str, choices=('raw', 'grm', 'smo', 'std', 'std_no_grm'), default='std', nargs='?', help='Preprocessing until which step')
-    parser.add_argument('--smo_window_size', type=int, default=1, nargs='?', help='Size of the smoothing window [number of frames].')
+    parser.add_argument('--smo_window_size', type=int, default=3, nargs='?', help='Size of the smoothing window [number of frames].')
     parser.add_argument('--smo_order', type=int, default=1, nargs='?', help='The polynomial used in Savgol filter.')
-    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
+#########
+    #parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'decimate', 'none'), default='decimate', nargs='?', help='smoothing mode')
+    parser.add_argument('--smooth_mode', type=str, choices=('medfilt', 'savgol_filter', 'moving_average', 'none'), default='moving_average', nargs='?', help='smoothing mode')
+#########
     parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
     parser.add_argument('--exp_uniform', type=str, choices=('True', 'False'), default='True', nargs='?', help='Export uniform data by converting all dominant hands to right and all non-dominant hands to left')
     parser.add_argument('--organise_data', type=str, default='False' , nargs='?', help='Organise data in separate subfolders if true.')
