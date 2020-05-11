@@ -12,6 +12,7 @@ import itertools
 from data_organiser import DataOrganiser
 import matplotlib.pyplot as plt
 import oreba_dis
+import oreba_sha
 import clemson
 import fic
 
@@ -187,6 +188,10 @@ def main(args=None):
         dataset = oreba_dis.Dataset(args.src_dir, args.exp_dir,
             args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
             args.exp_uniform, args.exp_format)
+    elif args.dataset == "OREBA-SHA":
+        dataset = oreba_sha.Dataset(args.src_dir, args.exp_dir,
+            args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
+            args.exp_uniform, args.exp_format)
     elif args.dataset == "FIC":
         dataset = fic.Dataset(args.src_dir, args.exp_dir,
             args.dom_hand_spec, args.label_spec, args.label_spec_inherit,
@@ -218,7 +223,7 @@ def main(args=None):
                 ("_uni" if args.exp_uniform else "")
             exp_file = args.dataset + "_" + id_s + pp_s + "." + args.exp_format
         else:
-            exp_file = args.dataset + "_" + id_s + "_inertial." + args.exp_format
+            exp_file = id_s + "_inertial_raw." + args.exp_format
 
         # Make exp_dir if it does not exist
         if not os.path.exists(args.exp_dir):
@@ -339,7 +344,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process inertial sensor data')
     parser.add_argument('--src_dir', type=str, default='OREBA-DIS', nargs='?', help='Directory to search for data')
     parser.add_argument('--exp_dir', type=str, default='Export', nargs='?', help='Directory for data export')
-    parser.add_argument('--dataset', choices=('OREBA-DIS', 'Clemson', 'FIC'), default='OREBA-DIS', nargs='?', help='Which dataset is used')
+    parser.add_argument('--dataset', choices=('OREBA-DIS', 'OREBA-SHA', 'Clemson', 'FIC'), default='OREBA-DIS', nargs='?', help='Which dataset is used')
     parser.add_argument('--sampling_rate', type=int, default=64, nargs='?', help='Sampling rate of exported signals in Hz')
     parser.add_argument('--use_vis', type=str2bool, default='False', nargs='?', help='If True, enable visualization')
     parser.add_argument('--use_gravity_removal', type=str2bool, default=True, help="If True, remove gravity during preprocessing")
