@@ -8,7 +8,7 @@ import csv
 import argparse
 import os
 import copy
-import logging
+from absl import logging
 from scipy import signal
 from math import radians, degrees
 import itertools
@@ -27,8 +27,8 @@ UPDATE_RATE = 16
 FACTOR_MILLIS = 1000
 FACTOR_NANOS = 1000000000
 GRAVITY = 9.80665
-logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s',
-    datefmt='%H:%M:%S', level=logging.INFO)
+#logging.set_verbosity('info')
+
 
 def estimate_initial_quaternion(acc, gyro, data_freq, seconds=5, inc_deg=20):
     """Estimate the initital quaternion from evenly distributed possibilities"""
@@ -211,9 +211,11 @@ def main(args=None):
         # Read subjects
         subject_ids = [x for x in next(os.walk(args.src_dir))[1]]
         reader = OrebaReader()
+        ALL_LIST,_,_,_ = DataOrganiser().get_splits(args.split_filenamepath)
         for subject_id in subject_ids:
-            # skip over faulty data file (1074_1)
-            if subject_id == "1074_1":
+            # skip over ones that are not in recording.csv e.g., faulty data files, the ones without concent.
+            if subject_id not in ALL_LIST:
+                logging.info("Skipped subject {} over".format(subject_id))
                 continue
             logging.info("Working on subject {}".format(subject_id))
             if args.exp_mode == 'dev':
@@ -394,9 +396,11 @@ def main(args=None):
     else: raise RuntimeError('No valid reader selected')
 
     if get_bool(args.organise_data):
-        DataOrganiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
+        organiser = DataOrganiser()
+        organiser.organise(src_dir=args.exp_dir, des_dir=args.des_dir,
             make_subfolders_val=get_bool(args.make_subfolders_val),
-            make_subfolders_test=get_bool(args.make_subfolders_test))
+            make_subfolders_test=get_bool(args.make_subfolders_test),
+            split_filenamepath = args.split_filenamepath)
 
     logging.info("Done")
 
@@ -420,6 +424,7 @@ if __name__ == '__main__':
     parser.add_argument('--des_dir', type=str, default='', nargs='?', help='Directory to copy train, val and test sets using data organiser.')
     parser.add_argument('--make_subfolders_val', type=str, default='False' , nargs='?', help='Create sub folder per each file in validation set if true.')
     parser.add_argument('--make_subfolders_test', type=str, default='False' , nargs='?', help='Create sub folder per each file in test set if true.')
+    parser.add_argument('--split_filenamepath', type=str, default='' , nargs='?', help='Full name and path of the file that contains the splits')
     parser.add_argument('--dom_hand_info_file_name', type=str, default='most_used_hand.csv' , nargs='?', help='the name of the file that contains the dominant hand info')
     parser.add_argument('--exp_format', choices=('csv', 'tfrecords'), default='csv', nargs='?', help='Format for export')
     args = parser.parse_args()
