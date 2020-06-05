@@ -47,7 +47,7 @@ The following flags can be used to specify the settings:
 | --exp_format | Format for export {csv, tfrecord} | csv |
 | --label_spec | Filename of label specification within src_dir | labels.xml |
 | --label_spec_inherit | Inherit label specification for sublabels (if label not included, always keep sublabels as Idle) | True |
-| --dom_hand_spec | Filename containing the dominant hand info | most_used_hand.csv |
+| --dom_hand_spec | Filename containing the dominant hand info | dominant_hand.csv |
 | --organise_data | If True, organise data in train, valid, test subfolders | False |
 | --organise_dir | Directory to copy train, val and test sets using data organiser | Organised |
 | --organise_subfolders | Create sub folder per each file in validation and test set | False |

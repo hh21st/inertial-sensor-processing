@@ -361,7 +361,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
     parser.add_argument('--label_spec', type=str, default='labels.xml', help='Filename of label specification')
     parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification for sublabels (if label not included, always keep sublabels as Idle)')
-    parser.add_argument('--dom_hand_spec', type=str, default='most_used_hand.csv' , nargs='?', help='Filename containing the dominant hand info')
+    parser.add_argument('--dom_hand_spec', type=str, default='dominant_hand.csv' , nargs='?', help='Filename containing the dominant hand info')
     parser.add_argument('--organise_data', type=str2bool, default=False, nargs='?', help='If True, organise data in train, valid, test subfolders')
     parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser')
     parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set')
