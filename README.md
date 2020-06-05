@@ -21,10 +21,10 @@ Make sure that all requirements are fulfilled
 $ pip install -r requirements.txt
 ```
 
-Then call `processing.py`.
+Then call `main.py`.
 
 ```
-$ python processing.py --src_dir=OREBA
+$ python main.py --src_dir=OREBA
 ```
 
 The following flags can be used to specify the settings:
