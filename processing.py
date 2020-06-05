@@ -222,8 +222,11 @@ def main(args=None):
                 ("_std" if args.use_standardization else "") +      \
                 ("_uni" if args.exp_uniform else "")
             exp_file = args.dataset + "_" + id_s + pp_s + "." + args.exp_format
-        else:
-            exp_file = id_s + "_inertial_raw." + args.exp_format
+        elif args.exp_mode == 'pub':
+            if args.use_gravity_removal:
+                exp_file = id_s + "_inertial_processed." + args.exp_format
+            else:
+                exp_file = id_s + "_inertial_raw." + args.exp_format
 
         # Make exp_dir if it does not exist
         if not os.path.exists(args.exp_dir):
