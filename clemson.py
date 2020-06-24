@@ -13,7 +13,7 @@ import numpy as np
 FREQUENCY = 15
 ACC_SENSITIVITY = 660.0
 GYRO_SENSITIVITY = 2.5
-DEFAULT_LABEL = "Idle"
+DEFAULT_LABEL = "idle"
 FLIP_ACC = [-1., 1., 1.]
 FLIP_GYRO = [1., -1., -1.]
 TIME_FACTOR = 1000000
@@ -205,14 +205,14 @@ class Dataset():
     self.exp_uniform = exp_uniform
     self.exp_format = exp_format
     # Class names
-    self.names_1, self.names_2, self.names_3, self.names_4, self.names_5 = \
+    self.names_1, self.names_2, self.names_3, self.names_4, self.names_5, self.names_6 = \
       self.__class_names()
 
   def __class_names(self):
     """Get class names from label master file"""
     label_spec_path = os.path.join(self.src_dir, self.label_spec)
     assert os.path.isfile(label_spec_path), "Couldn't find label master file"
-    names_1 = []; names_2 = []; names_3 = []; names_4 = []; names_5 = []
+    names_1, names_2, names_3, names_4, names_5, names_6 = [], [], [], [], [], []
     tree = etree.parse(label_spec_path)
     categories = tree.getroot()
     for tag in categories[0]:
@@ -225,7 +225,9 @@ class Dataset():
       names_4.append(tag.attrib['name'])
     for tag in categories[4]:
       names_5.append(tag.attrib['name'])
-    return names_1, names_2, names_3, names_4, names_5
+    for tag in categories[5]:
+      names_6.append(tag.attrib['name'])
+    return names_1, names_2, names_3, names_4, names_5, names_6
 
   def __get_food_class(self, food):
     if food in DESSERTS_FOODS:
@@ -337,11 +339,12 @@ class Dataset():
     # Read gesture ground truth
     gesture_dir = os.path.join(self.src_dir, "all-gt-gestures", id[0],
       id[1], "gesture_union.txt")
-    label_1, start_time, end_time = [], [], []
+    label_1, label_2, start_time, end_time = [], [], [], []
     with open(gesture_dir) as dest_f:
       for row in csv.reader(dest_f, delimiter='\t'):
-        if row[0].lower() in self.names_1:
-          label_1.append(row[0].lower())
+        if row[0].lower() in self.names_2:
+          label_1.append("intake")
+          label_2.append(row[0].lower())
           start_time.append(_index_to_ms(int(row[1])))
           end_time.append(_index_to_ms(int(row[2])))
     # Read bite ground truth by matching with gestures
@@ -353,7 +356,8 @@ class Dataset():
     labels_3 = np.empty(num, dtype='U25'); labels_3.fill(DEFAULT_LABEL)
     labels_4 = np.empty(num, dtype='U25'); labels_4.fill(DEFAULT_LABEL)
     labels_5 = np.empty(num, dtype='U25'); labels_5.fill(DEFAULT_LABEL)
-    for l1, start, end in zip(label_1, start_time, end_time):
+    labels_6 = np.empty(num, dtype='U25'); labels_6.fill(DEFAULT_LABEL)
+    for l1, l2, start, end in zip(label_1, label_2, start_time, end_time):
       start_frame = np.argmax(np.array(timestamps) >= start)
       end_frame = np.argmax(np.array(timestamps) > end)
       match_found = False
@@ -361,33 +365,34 @@ class Dataset():
         for row in csv.reader(dest_f, delimiter='\t'):
           time = _index_to_ms(int(row[1]))
           if time >= start and time <= end:
-            if row[2].lower() in self.names_2:
-              l2 = row[2].lower()
-            if row[3].lower() in self.names_3:
-              l3 = row[3].lower()
-            if row[4].lower() in self.names_4:
-              l4 = row[4].lower()
+            if row[2].lower() in self.names_3:
+              l3 = row[2].lower()
+            if row[3].lower() in self.names_4:
+              l4 = row[3].lower()
+            if row[4].lower() in self.names_5:
+              l5 = row[4].lower()
             food = self.__get_food_class(row[5].lower())
-            if food in self.names_5:
-              l5 = food
+            if food in self.names_6:
+              l6 = food
             else:
-              l5 = "NA"
+              l6 = "NA"
               logging.warn("No food class identified for {}".format(food))
             match_found = True
             break
       if not match_found:
-        l2 = "NA"; l3 = "NA"; l4 = "NA"; l5 = "NA";
+        l3 = "NA"; l4 = "NA"; l5 = "NA"; l6 = "NA"
       labels_1[start_frame:end_frame] = l1
-      if l2 in self.names_2:
-        labels_2[start_frame:end_frame] = l2
+      labels_2[start_frame:end_frame] = l2
       if l3 in self.names_3:
         labels_3[start_frame:end_frame] = l3
       if l4 in self.names_4:
         labels_4[start_frame:end_frame] = l4
       if l5 in self.names_5:
         labels_5[start_frame:end_frame] = l5
+      if l6 in self.names_6:
+        labels_6[start_frame:end_frame] = l6
 
-    return (labels_1, labels_2, labels_3, labels_4, labels_5)
+    return (labels_1, labels_2, labels_3, labels_4, labels_5, labels_6)
 
   def write(self, path, id, timestamps, data, dominant_hand, labels):
     frame_ids = range(0, len(timestamps))
@@ -406,12 +411,12 @@ class Dataset():
         writer = csv.writer(csvfile, delimiter=',')
         writer.writerow(["id", "frame_id", "timestamp", "acc_x", "acc_y",
           "acc_z", "gyro_x", "gyro_y", "gyro_z", "hand",
-          "label_1", "label_2", "label_3", "label_4", "label_5"])
+          "label_1", "label_2", "label_3", "label_4", "label_5", "label_6"])
         for i in range(0, len(timestamps)):
           writer.writerow([id, frame_ids[i], timestamps[i],
             acc[i][0], acc[i][1], acc[i][2], gyro[i][0], gyro[i][1],
             gyro[i][2], dominant_hand, labels[0][i], labels[1][i],
-            labels[2][i], labels[3][i], labels[4][i]])
+            labels[2][i], labels[3][i], labels[4][i], labels[5][i]])
     elif self.exp_format == 'tfrecord':
       with tf.io.TFRecordWriter(path) as tfrecord_writer:
         for i in range(0, len(timestamps)):
@@ -425,7 +430,8 @@ class Dataset():
             'example/label_2': _bytes_feature(labels[1][i].encode()),
             'example/label_3': _bytes_feature(labels[2][i].encode()),
             'example/label_4': _bytes_feature(labels[3][i].encode()),
-            'example/label_5': _bytes_feature(labels[4][i].encode())
+            'example/label_5': _bytes_feature(labels[4][i].encode()),
+            'example/label_6': _bytes_feature(labels[4][i].encode())
           }))
           tfrecord_writer.write(example.SerializeToString())
 
