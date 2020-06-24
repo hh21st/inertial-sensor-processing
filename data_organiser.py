@@ -37,9 +37,9 @@ class DataOrganiser:
     test_dir = os.path.join(self.organise_dir, "test")
 
     all_files = os.listdir(self.src_dir)
-    train_files = [f for f in all_files if any("_" + id in f for id in train_ids)]
-    valid_files = [f for f in all_files if any("_" + id in f for id in valid_ids)]
-    test_files = [f for f in all_files if any("_" + id in f for id in test_ids)]
+    train_files = [f for f in all_files if any(id + "_" in f for id in train_ids)]
+    valid_files = [f for f in all_files if any(id + "_" in f for id in valid_ids)]
+    test_files = [f for f in all_files if any(id + "_" in f for id in test_ids)]
 
     assert len(list(set(train_files) & set(valid_files))) == 0, \
       "Overlap between train and valid"
