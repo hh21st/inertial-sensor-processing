@@ -431,7 +431,7 @@ class Dataset():
             'example/label_3': _bytes_feature(labels[2][i].encode()),
             'example/label_4': _bytes_feature(labels[3][i].encode()),
             'example/label_5': _bytes_feature(labels[4][i].encode()),
-            'example/label_6': _bytes_feature(labels[4][i].encode())
+            'example/label_6': _bytes_feature(labels[5][i].encode())
           }))
           tfrecord_writer.write(example.SerializeToString())
 
