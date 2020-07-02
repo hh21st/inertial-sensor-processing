@@ -9,7 +9,7 @@ Export as `csv` or `tfrecord` files.
 Specific labels can be selected by including a specification file.
 
 Supported datasets currently include:
-- [OREBA-DIS](http://oreba.newcastle.edu.au)
+- [OREBA-DIS and OREBA-SHA](http://www.newcastle.edu.au/oreba)
 - [Clemson Cafeteria](http://cecas.clemson.edu/~ahoover/cafeteria/)
 - [Food Intake Cycle (FIC)](https://mug.ee.auth.gr/intake-cycle-detection/)
 
@@ -24,16 +24,16 @@ $ pip install -r requirements.txt
 Then call `main.py`.
 
 ```
-$ python main.py --src_dir=OREBA
+$ python main.py --src_dir=OREBA-DIS
 ```
 
 The following flags can be used to specify the settings:
 
 | Argument | Description | Default |
 | --- | --- | --- |
-| --src_dir | Directory to search for data | OREBA |
+| --src_dir | Directory to search for data | OREBA-DIS |
 | --exp_dir | Directory for data export | Export |
-| --dataset | Which dataset is used {OREBA-DIS, Clemson, or FIC} | OREBA-DIS |
+| --dataset | Which dataset is used {OREBA-DIS, OREBA-SHA, Clemson, or FIC} | OREBA-DIS |
 | --sampling_rate | Sampling rate of exported signals in Hz | 64 |
 | --use_vis | If True, enable visualization | False |
 | --use_gravity_removal | If True, remove gravity during preprocessing | True |
