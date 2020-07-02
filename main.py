@@ -359,7 +359,7 @@ if __name__ == '__main__':
   parser.add_argument('--exp_mode', type=str, choices=('dev', 'pub'), default='dev', nargs='?', help='Write file for publication or development')
   parser.add_argument('--exp_uniform', type=str2bool, default=True, nargs='?', help='Convert all dominant hands to right and all non-dominant hands to left')
   parser.add_argument('--exp_format', choices=('csv', 'tfrecord'), default='csv', nargs='?', help='Format for export')
-  parser.add_argument('--label_spec', type=str, default='labels.xml', help='Filename of label specification')
+  parser.add_argument('--label_spec', type=str, default='label_spec/OREBA_only_intake.xml', help='Filename of label specification')
   parser.add_argument('--label_spec_inherit', type=str2bool, default=True, help='Inherit label specification for sublabels (if label not included, always keep sublabels as Idle)')
   parser.add_argument('--dom_hand_spec', type=str, default='dominant_hand.csv' , nargs='?', help='Filename containing the dominant hand info')
   parser.add_argument('--organise_data', type=str2bool, default=False, nargs='?', help='If True, organise data in train, valid, test subfolders')

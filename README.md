@@ -51,3 +51,9 @@ The following flags can be used to specify the settings:
 | --organise_data | If True, organise data in train, valid, test subfolders | False |
 | --organise_dir | Directory to copy train, val and test sets using data organiser | Organised |
 | --organise_subfolders | Create sub folder per each file in validation and test set | False |
+
+## Label specfication
+
+Control what labels are included by selecting or editing the appropriate `label_spec` file.
+This only applies to the OREBA and Clemson datasets.
+Templates are available in the `label_spec` directory.

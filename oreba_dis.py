@@ -63,10 +63,9 @@ class Dataset():
 
   def __class_names(self):
     """Get class names from label master file"""
-    label_spec_path = os.path.join(self.src_dir, self.label_spec)
-    assert os.path.isfile(label_spec_path), "Couldn't find label master file at {}".format(label_spec_path)
+    assert os.path.isfile(self.label_spec), "Couldn't find label_spec file at {}".format(self.label_spec)
     names_1 = []; names_2 = []; names_3 = []; names_4 = []
-    tree = etree.parse(label_spec_path)
+    tree = etree.parse(self.label_spec)
     categories = tree.getroot()
     for tag in categories[0]:
       names_1.append(tag.attrib['name'])
