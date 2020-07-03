@@ -5,7 +5,6 @@ import datetime as dt
 import csv
 import os
 import logging
-import jpype.imports
 import xml.etree.cElementTree as etree
 import tensorflow as tf
 
@@ -53,10 +52,6 @@ class Dataset():
     self.label_spec_inherit = label_spec_inherit
     self.exp_uniform = exp_uniform
     self.exp_format = exp_format
-    # Init jpype
-    jpype.addClassPath('unisens/org.unisens.jar')
-    jpype.addClassPath('unisens/org.unisens.ri.jar')
-    jpype.startJVM()
     # Class names
     self.names_1, self.names_2, self.names_3, self.names_4 = \
       self.__class_names()
@@ -85,55 +80,34 @@ class Dataset():
     return id != "1074_1"
 
   def data(self, _, id):
-    logging.info("Reading raw data from Unisens")
-    def _parse_j2py(jpype_x, jpype_y, jpype_z):
-      """Convert from double[][] to list"""
-      return list(zip([list(i)[0] for i in jpype_x],
-              [list(i)[0] for i in jpype_y],
-              [list(i)[0] for i in jpype_z]))
-    dir = os.path.join(self.src_dir, id, "data_sensor")
-    from org.unisens import UnisensFactoryBuilder
-    jUnisensFactory = UnisensFactoryBuilder.createFactory()
-    jUnisens = jUnisensFactory.createUnisens(dir)
-    jLeftAccXEntry = jUnisens.getEntry('left_accx.bin')
-    jLeftAccYEntry = jUnisens.getEntry('left_accy.bin')
-    jLeftAccZEntry = jUnisens.getEntry('left_accz.bin')
-    jLeftGyroXEntry = jUnisens.getEntry('left_gyrox.bin')
-    jLeftGyroYEntry = jUnisens.getEntry('left_gyroy.bin')
-    jLeftGyroZEntry = jUnisens.getEntry('left_gyroz.bin')
-    jRightAccXEntry = jUnisens.getEntry('right_accx.bin')
-    jRightAccYEntry = jUnisens.getEntry('right_accy.bin')
-    jRightAccZEntry = jUnisens.getEntry('right_accz.bin')
-    jRightGyroXEntry = jUnisens.getEntry('right_gyrox.bin')
-    jRightGyroYEntry = jUnisens.getEntry('right_gyroy.bin')
-    jRightGyroZEntry = jUnisens.getEntry('right_gyroz.bin')
-    count = jLeftAccXEntry.getCount()
-    sample_rate = jLeftAccXEntry.getSampleRate()
-    left_acc = _parse_j2py(jLeftAccXEntry.readScaled(count),
-                 jLeftAccYEntry.readScaled(count),
-                 jLeftAccZEntry.readScaled(count))
-    left_gyro = _parse_j2py(jLeftGyroXEntry.readScaled(count),
-                jLeftGyroYEntry.readScaled(count),
-                jLeftGyroZEntry.readScaled(count))
-    right_acc = _parse_j2py(jRightAccXEntry.readScaled(count),
-                jRightAccYEntry.readScaled(count),
-                jRightAccZEntry.readScaled(count))
-    right_gyro = _parse_j2py(jRightGyroXEntry.readScaled(count),
-                 jRightGyroYEntry.readScaled(count),
-                 jRightGyroZEntry.readScaled(count))
+    logging.info("Reading raw data from csv")
+    file = os.path.join(self.src_dir, id, id + "_inertial_raw.csv")
+    assert file, "No raw data found for {}".format(id)
+    left_acc, left_gyro, right_acc, right_gyro = [], [], [], []
+    with open(file) as dest_f:
+      reader = csv.reader(dest_f, delimiter=",")
+      next(reader) # Skip header
+      # Read values
+      for row in reader:
+        left_acc.append([float(row[3]), float(row[4]), float(row[5])])
+        left_gyro.append([float(row[6]), float(row[7]), float(row[8])])
+        right_acc.append([float(row[9]), float(row[10]), float(row[11])])
+        right_gyro.append([float(row[12]), float(row[13]), float(row[14])])
+    # Derive timestamps
+    count = len(left_acc)
     dt = TIME_FACTOR // FREQUENCY # In microseconds
     timestamps = range(0, count*dt, dt)
     return timestamps, {"left":  (left_acc, left_gyro), \
               "right": (right_acc, right_gyro)}
 
   def dominant(self, id):
-    file_full_name = os.path.join(self.src_dir, self.dom_hand_spec)
-    dom_hand_info = csv.reader(open(file_full_name, 'r'), delimiter=',')
-    next(dom_hand_info, None)
-    for row in dom_hand_info:
-      if id == row[0]:
-        return row[1].strip().lower()
-    return "NA"
+    file = os.path.join(self.src_dir, id, id + "_inertial_raw.csv")
+    assert file, "No data found for {}".format(id)
+    with open(file) as dest_f:
+      reader = csv.reader(dest_f, delimiter=",")
+      next(reader) # Skip header
+      for row in reader:
+        return row[15].lower()
 
   def labels(self, _, id, timestamps):
     def _time_to_ms(time):
@@ -253,7 +227,6 @@ class Dataset():
           tfrecord_writer.write(example.SerializeToString())
 
   def done(self):
-    jpype.shutdownJVM()
     logging.info("Done")
 
   def get_flip_signs(self):

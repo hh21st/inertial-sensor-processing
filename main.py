@@ -43,7 +43,7 @@ def gravity_removal(acc, gyro, init_q, data_freq, update_freq, vis):
   madgwick = MadgwickFusion(init_q, data_freq)
   # Initialize visualization
   pv = None
-  if vis == 'True':
+  if vis:
     pv = PygameViewer(640, 480, init_q, data_freq)
   # Process
   acc_0 = []
@@ -51,7 +51,7 @@ def gravity_removal(acc, gyro, init_q, data_freq, update_freq, vis):
   for acc_t, gyro_t in zip(acc, gyro):
     # Sensor fusion update
     madgwick.update(acc_t, gyro_t)
-    if vis == 'True':
+    if vis:
       pv.set_quaternion(madgwick.q)
     # Remove gravity from acceleration
     acc_t0 = quaternion.rotate_vectors(madgwick.q, np.array(acc_t))
@@ -59,7 +59,7 @@ def gravity_removal(acc, gyro, init_q, data_freq, update_freq, vis):
     acc_t0 = quaternion.rotate_vectors(madgwick.q.inverse(), acc_t0)
     acc_0.append(acc_t0.tolist())
     # Update screen according to update rate
-    if vis == 'True':
+    if vis:
       if i % (data_freq//update_freq) == 0:
         if not pv.update():
           break
