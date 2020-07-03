@@ -3,6 +3,7 @@ import os
 import shutil
 import logging
 import oreba_dis
+import oreba_sha
 import fic
 import clemson
 
@@ -23,6 +24,10 @@ class DataOrganiser:
       train_ids = oreba_dis.TRAIN_IDS
       valid_ids = oreba_dis.VALID_IDS
       test_ids = oreba_dis.TEST_IDS
+    elif self.dataset == "OREBA-SHA":
+      train_ids = oreba_sha.TRAIN_IDS
+      valid_ids = oreba_sha.VALID_IDS
+      test_ids = oreba_sha.TEST_IDS
     elif self.dataset == "FIC":
       train_ids = fic.TRAIN_IDS
       valid_ids = fic.VALID_IDS
@@ -94,7 +99,7 @@ def str2bool(v):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Organise exported files')
   parser.add_argument('--src_dir', type=str, default='OREBA-DIS', nargs='?', help='Directory to search for data')
-  parser.add_argument('--dataset', choices=('OREBA-DIS', 'Clemson', 'FIC'), default='OREBA-DIS', nargs='?', help='Which dataset is used')
+  parser.add_argument('--dataset', choices=('OREBA-DIS', 'OREBA-SHA', 'Clemson', 'FIC'), default='OREBA-DIS', nargs='?', help='Which dataset is used')
   parser.add_argument('--organise_dir', type=str, default='Organised', nargs='?', help='Directory to copy train, val and test sets using data organiser')
   parser.add_argument('--organise_subfolders', type=str2bool, default=False, nargs='?', help='Create sub folder per each file in validation and test set')
   args = parser.parse_args()
